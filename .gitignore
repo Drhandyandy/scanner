@@ -1,0 +1,5 @@
+Nothing should be ignored based on the provided file changes. The only added file is a Python source file (`bitcoin_block_scanner.py`), which should not be ignored. There are no build artifacts, dependencies, temporary files, or other items that need to be excluded.node_modules/
+.next/
+dist/
+build/
+*.log
