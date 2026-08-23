@@ -668,6 +668,8 @@ class NearbySquaredEngine:
                          include_squares: bool = True,
                          include_bridge_powers: bool = True,
                          include_mersenne: bool = False,
+                         include_bitshifts: bool = False,
+                         include_mistakes: bool = False,
                          N: int = None) -> Set[int]:
         """
         Expand candidate set with nearby and squared values
@@ -678,6 +680,8 @@ class NearbySquaredEngine:
             include_squares: Whether to include squared values
             include_bridge_powers: Whether to include bridge constant powers
             include_mersenne: Whether to include Mersenne numbers (2^x - 1)
+            include_bitshifts: Whether to include bit-shifted variants
+            include_mistakes: Whether to include developer mistake patterns
             N: Modulus for squared operations
         
         Returns:
@@ -727,6 +731,23 @@ class NearbySquaredEngine:
             mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers()
             expanded.update(mersenne_nums)
             print(f"  Added {len(mersenne_nums)} Mersenne numbers (2^x - 1)")
+        
+        # Step 7: Add bit-shifted variants
+        if include_bitshifts:
+            print(f"  Generating bit-shifted variants for {len(candidates)} candidates...")
+            bitshift_count = 0
+            for c in list(candidates)[:100]:  # Limit to avoid explosion
+                shifts = BitShiftEngine.generate_all_shifts(c, N=N)
+                expanded.update(shifts)
+                bitshift_count += len(shifts)
+            print(f"  Added {bitshift_count:,} bit-shifted variants")
+        
+        # Step 8: Add developer mistake patterns
+        if include_mistakes:
+            print("  Generating developer mistake patterns...")
+            mistakes = DevMistakeFocus.generate_all_mistakes()
+            expanded.update(mistakes)
+            print(f"  Added {len(mistakes):,} developer mistake candidates")
         
         return expanded
 
@@ -948,6 +969,366 @@ class NearbySquaredEngine:
                 expanded.add((c * y * y) % N)
         
         return expanded
+
+
+class BitShiftEngine:
+    """
+    Bit-Shifting Engine - Generates candidates by simulating bit manipulation errors.
+    
+    Developers often make mistakes with:
+    - Accidental left/right shifts
+    - Byte order confusion (endianness)
+    - Bit rotations
+    - Mask operations gone wrong
+    """
+    
+    @staticmethod
+    def left_shifts(x: int, max_shift: int = 255, N: int = None) -> Set[int]:
+        """Generate x << k for k in 1..max_shift"""
+        if N is None:
+            N = CURVE.n
+        
+        results = set()
+        for k in range(1, min(max_shift + 1, 256)):
+            shifted = (x << k) % N
+            results.add(shifted)
+        return results
+    
+    @staticmethod
+    def right_shifts(x: int, max_shift: int = 255) -> Set[int]:
+        """Generate x >> k for k in 1..max_shift"""
+        results = set()
+        for k in range(1, min(max_shift + 1, 256)):
+            if x >> k > 0:  # Only add non-zero results
+                results.add(x >> k)
+        return results
+    
+    @staticmethod
+    def rotate_left(x: int, bits: int, N: int = None) -> Set[int]:
+        """Generate circular left rotations for various bit amounts"""
+        if N is None:
+            N = CURVE.n
+        
+        results = set()
+        # Work with 256-bit representation
+        x_256 = x % N
+        for shift in [1, 2, 4, 8, 16, 32, 64, 128]:
+            # Rotate left by 'shift' bits within 256-bit field
+            shifted = ((x_256 << shift) | (x_256 >> (256 - shift))) & ((1 << 256) - 1)
+            if 0 < shifted < N:
+                results.add(shifted)
+        return results
+    
+    @staticmethod
+    def rotate_right(x: int, bits: int, N: int = None) -> Set[int]:
+        """Generate circular right rotations for various bit amounts"""
+        if N is None:
+            N = CURVE.n
+        
+        results = set()
+        x_256 = x % N
+        for shift in [1, 2, 4, 8, 16, 32, 64, 128]:
+            # Rotate right by 'shift' bits within 256-bit field
+            shifted = ((x_256 >> shift) | (x_256 << (256 - shift))) & ((1 << 256) - 1)
+            if 0 < shifted < N:
+                results.add(shifted)
+        return results
+    
+    @staticmethod
+    def byte_swap(x: int, N: int = None) -> Set[int]:
+        """Reverse byte order (endianness error simulation)"""
+        if N is None:
+            N = CURVE.n
+        
+        results = set()
+        # Convert to 32-byte representation
+        byte_repr = x.to_bytes(32, byteorder='big')
+        # Reverse bytes
+        reversed_bytes = byte_repr[::-1]
+        reversed_int = int.from_bytes(reversed_bytes, byteorder='big')
+        if 0 < reversed_int < N:
+            results.add(reversed_int)
+        
+        # Also try swapping in 8-byte chunks
+        for chunk_size in [4, 8, 16]:
+            if len(byte_repr) % chunk_size == 0:
+                chunks = [byte_repr[i:i+chunk_size] for i in range(0, len(byte_repr), chunk_size)]
+                swapped = b''.join(chunks[::-1])
+                swapped_int = int.from_bytes(swapped, byteorder='big')
+                if 0 < swapped_int < N:
+                    results.add(swapped_int)
+        
+        return results
+    
+    @staticmethod
+    def masked_shifts(x: int, N: int = None) -> Set[int]:
+        """Generate (x << k) & mask for common mask patterns"""
+        if N is None:
+            N = CURVE.n
+        
+        results = set()
+        masks = [
+            (1 << 128) - 1,  # Lower 128 bits
+            (1 << 192) - 1,  # Lower 192 bits
+            0xFFFFFFFF,       # Lower 32 bits
+            0xFFFFFFFFFFFFFFFF,  # Lower 64 bits
+            0xDEADBEEF,
+            0xCAFEBABE,
+        ]
+        
+        for mask in masks:
+            for k in [1, 2, 4, 8, 16, 32]:
+                shifted = (x << k) & mask
+                if 0 < shifted < N:
+                    results.add(shifted)
+        
+        return results
+    
+    @staticmethod
+    def generate_all_shifts(x: int, N: int = None) -> Set[int]:
+        """Generate all bit-shift variants of a candidate"""
+        if N is None:
+            N = CURVE.n
+        
+        all_shifts = set()
+        all_shifts.add(x)  # Original
+        
+        # Left shifts (limited to avoid too many)
+        all_shifts.update(BitShiftEngine.left_shifts(x, max_shift=64, N=N))
+        
+        # Right shifts
+        all_shifts.update(BitShiftEngine.right_shifts(x, max_shift=64))
+        
+        # Rotations
+        all_shifts.update(BitShiftEngine.rotate_left(x, 8, N=N))
+        all_shifts.update(BitShiftEngine.rotate_right(x, 8, N=N))
+        
+        # Byte swaps
+        all_shifts.update(BitShiftEngine.byte_swap(x, N=N))
+        
+        # Masked shifts
+        all_shifts.update(BitShiftEngine.masked_shifts(x, N=N))
+        
+        return all_shifts
+
+
+class DevMistakeFocus:
+    """
+    Developer Mistake Focus - Targets common developer errors and test patterns.
+    
+    Includes:
+    - Hardcoded test keys from tutorials/documentation
+    - ASCII/hex decoding errors
+    - Timestamp-based keys
+    - Sequence patterns
+    - Small multipliers
+    - Hash collisions (SHA256 of common strings)
+    """
+    
+    @staticmethod
+    def hardcoded_test_keys() -> Set[int]:
+        """Common test/private keys used in examples and tutorials"""
+        keys = {
+            1,  # Genesis key attempt
+            2, 3, 4, 5, 6, 7, 8, 9, 10,  # Sequential small keys
+            42,  # Answer to everything
+            12345,  # Common test value
+            123456,  # Common test value
+            12345678,  # Common test value
+            0xDEADBEEF,  # Classic hex pattern
+            0xCAFEBABE,  # Java magic number
+            0x12345678,  # Sequential hex
+            0x87654321,  # Reversed sequential
+            0xAAAAAAAA,  # Alternating pattern
+            0x55555555,  # Alternating bits
+            0x01010101,  # Repeated byte
+            0xFFFFFFFF,  # All ones (32-bit)
+        }
+        
+        # Add repeated byte patterns (256-bit)
+        for byte_val in [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 
+                         0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]:
+            pattern = int(hex(byte_val)[2:] * 64, 16)  # Repeat byte 64 times (256 bits)
+            if 0 < pattern < CURVE.n:
+                keys.add(pattern)
+        
+        return keys
+    
+    @staticmethod
+    def ascii_hex_errors() -> Set[int]:
+        """Keys derived from misinterpreted ASCII strings"""
+        keys = set()
+        
+        common_strings = [
+            "bitcoin", "Bitcoin", "BITCOIN",
+            "password", "Password", "PASSWORD",
+            "test", "Test", "TEST",
+            "private", "Private", "PRIVATE",
+            "key", "Key", "KEY",
+            "secret", "Secret", "SECRET",
+            "admin", "Admin", "ADMIN",
+            "root", "Root", "ROOT",
+            "user", "User", "USER",
+            "wallet", "Wallet", "WALLET",
+            "0", "1", "00", "01", "000", "0000",
+            "",  # Empty string
+            " ",  # Space
+            "\n", "\t",  # Whitespace
+        ]
+        
+        import hashlib
+        
+        for s in common_strings:
+            # Direct ASCII to int conversion
+            if s:
+                ascii_int = int.from_bytes(s.encode('utf-8'), 'big')
+                if 0 < ascii_int < CURVE.n:
+                    keys.add(ascii_int)
+            
+            # SHA256 hash of string
+            hash_val = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16)
+            if 0 < hash_val < CURVE.n:
+                keys.add(hash_val)
+            
+            # Double SHA256 (Bitcoin style)
+            double_hash = hashlib.sha256(hashlib.sha256(s.encode('utf-8')).digest()).hexdigest()
+            double_hash_int = int(double_hash, 16)
+            if 0 < double_hash_int < CURVE.n:
+                keys.add(double_hash_int)
+        
+        return keys
+    
+    @staticmethod
+    def timestamp_keys() -> Set[int]:
+        """Keys derived from Unix timestamps (2009-2024)"""
+        keys = set()
+        
+        important_timestamps = [
+            1231006505,  # Genesis block timestamp
+            1231006505 + 600,  # +10 minutes
+            1231006505 + 3600,  # +1 hour
+            1231006505 + 86400,  # +1 day
+            1262304000,  # 2010-01-01
+            1293840000,  # 2011-01-01
+            1325376000,  # 2012-01-01
+            1356998400,  # 2013-01-01
+            1388534400,  # 2014-01-01
+            1420070400,  # 2015-01-01
+            1451606400,  # 2016-01-01
+            1483228800,  # 2017-01-01
+            1514764800,  # 2018-01-01
+            1546300800,  # 2019-01-01
+            1577836800,  # 2020-01-01
+            1609459200,  # 2021-01-01
+            1640995200,  # 2022-01-01
+            1672531200,  # 2023-01-01
+            1704067200,  # 2024-01-01
+        ]
+        
+        # Add timestamps directly
+        keys.update(important_timestamps)
+        
+        # Add timestamps multiplied by common factors
+        for ts in important_timestamps:
+            for mult in [1000, 1000000, 1000000000]:
+                scaled = ts * mult
+                if 0 < scaled < CURVE.n:
+                    keys.add(scaled)
+        
+        # Add SHA256 of timestamp strings
+        import hashlib
+        for ts in important_timestamps:
+            hash_val = int(hashlib.sha256(str(ts).encode()).hexdigest(), 16)
+            if 0 < hash_val < CURVE.n:
+                keys.add(hash_val)
+        
+        return keys
+    
+    @staticmethod
+    def sequence_patterns() -> Set[int]:
+        """Keys with obvious sequence patterns"""
+        keys = set()
+        
+        # Repeated nibbles
+        for nibble in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']:
+            pattern = int(nibble * 64, 16)  # 64 nibbles = 256 bits
+            if 0 < pattern < CURVE.n:
+                keys.add(pattern)
+        
+        # Sequential patterns
+        sequential = [
+            int('0123456789abcdef' * 16, 16),
+            int('fedcba9876543210' * 16, 16),
+            int('1234567890abcdef' * 16, 16),
+        ]
+        for seq in sequential:
+            if 0 < seq < CURVE.n:
+                keys.add(seq)
+        
+        # Alternating patterns
+        alternating = [
+            int('ab' * 32, 16),
+            int('ba' * 32, 16),
+            int('cd' * 32, 16),
+            int('dc' * 32, 16),
+            int('ef' * 32, 16),
+            int('fe' * 32, 16),
+        ]
+        for alt in alternating:
+            if 0 < alt < CURVE.n:
+                keys.add(alt)
+        
+        return keys
+    
+    @staticmethod
+    def small_multipliers() -> Set[int]:
+        """Small multipliers that aren't sequential"""
+        keys = set()
+        
+        # Common "random-looking" small numbers people use
+        special_small = [
+            100, 200, 500, 1000,
+            1111, 2222, 3333, 4444, 5555, 6666, 7777, 8888, 9999,
+            10101, 12121, 13131,
+            65535, 65536, 65537,  # Boundary values
+            100000, 1000000,
+            2**16, 2**20, 2**24, 2**32,  # Powers of 2
+            2**16 - 1, 2**20 - 1, 2**24 - 1, 2**32 - 1,  # Near powers of 2
+        ]
+        
+        keys.update(special_small)
+        
+        # Multiply by small primes
+        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
+        for base in special_small[:10]:  # Limit to avoid too many
+            for p in primes:
+                product = base * p
+                if 0 < product < CURVE.n:
+                    keys.add(product)
+        
+        return keys
+    
+    @staticmethod
+    def generate_all_mistakes() -> Set[int]:
+        """Generate all developer mistake candidates"""
+        all_mistakes = set()
+        
+        print("  Generating hardcoded test keys...")
+        all_mistakes.update(DevMistakeFocus.hardcoded_test_keys())
+        
+        print("  Generating ASCII/hex error patterns...")
+        all_mistakes.update(DevMistakeFocus.ascii_hex_errors())
+        
+        print("  Generating timestamp-based keys...")
+        all_mistakes.update(DevMistakeFocus.timestamp_keys())
+        
+        print("  Generating sequence patterns...")
+        all_mistakes.update(DevMistakeFocus.sequence_patterns())
+        
+        print("  Generating small multipliers...")
+        all_mistakes.update(DevMistakeFocus.small_multipliers())
+        
+        return all_mistakes
 
     @staticmethod
     def hybrid_squared_engine(candidates: Set[int], N: int = None) -> Set[int]:
@@ -1449,6 +1830,10 @@ def main():
         print("16. Display Bridge Powers (65535/65536/65537)")
         print("17. Display Mersenne Numbers (2^x - 1)")
         print("18. Run Hyper-Lattice Dimensional Scan")
+        print("19. View Bit-Shift Samples")
+        print("20. View Dev Mistake Samples")
+        print("21. Full Expansion (Bit-Shift + Mistakes + All)")
+        print("22. Export All Candidates to File")
         print("0. Exit")
         print("-"*70)
         
@@ -1708,6 +2093,131 @@ def main():
             print(f"dimensional nearby and hybrid squared), modify the call to")
             print(f"expand_dimensional() with include_dimensional_nearby=True and")
             print(f"include_hybrid_squared=True, but beware of memory usage!")
+        
+        elif choice == "19":
+            print("\n" + "="*70)
+            print("BIT-SHIFT SAMPLES")
+            print("="*70)
+            
+            # Pick a few sample candidates
+            D = DigitalBridge.get_D()
+            base_candidates = GeometricFamilies.generate_all_candidates(D, 32)
+            filtered = GeometricFamilies.filter_candidates(base_candidates)
+            samples = list(filtered)[:5]
+            
+            print("\nGenerating bit-shift variants for sample candidates:\n")
+            for i, c in enumerate(samples):
+                print(f"Candidate {i+1}: {hex(c)}")
+                shifts = BitShiftEngine.generate_all_shifts(c)
+                print(f"  Generated {len(shifts)} variants:")
+                shift_list = sorted(list(shifts))[:10]
+                for s in shift_list:
+                    print(f"    {hex(s)}")
+                if len(shifts) > 10:
+                    print(f"    ... and {len(shifts) - 10} more")
+                print()
+        
+        elif choice == "20":
+            print("\n" + "="*70)
+            print("DEVELOPER MISTAKE SAMPLES")
+            print("="*70)
+            
+            print("\nGenerating developer mistake patterns:\n")
+            mistakes = DevMistakeFocus.generate_all_mistakes()
+            print(f"\nTotal mistake candidates: {len(mistakes):,}")
+            
+            print("\nSamples by category:")
+            
+            print("\n1. Hardcoded test keys:")
+            test_keys = DevMistakeFocus.hardcoded_test_keys()
+            for k in sorted(list(test_keys))[:10]:
+                print(f"   {hex(k)}")
+            
+            print("\n2. ASCII/hex errors (SHA256 hashes):")
+            ascii_errors = DevMistakeFocus.ascii_hex_errors()
+            for h in sorted(list(ascii_errors))[:5]:
+                print(f"   {hex(h)}")
+            
+            print("\n3. Timestamp keys:")
+            ts_keys = DevMistakeFocus.timestamp_keys()
+            for t in sorted(list(ts_keys))[:5]:
+                print(f"   {hex(t)}")
+            
+            print("\n4. Sequence patterns:")
+            seq_patterns = DevMistakeFocus.sequence_patterns()
+            for s in sorted(list(seq_patterns))[:5]:
+                print(f"   {hex(s)}")
+            
+            print("\n5. Small multipliers:")
+            small_mult = DevMistakeFocus.small_multipliers()
+            for m in sorted(list(small_mult))[:10]:
+                print(f"   {hex(m)}")
+        
+        elif choice == "21":
+            print("\n" + "="*70)
+            print("FULL EXPANSION (BIT-SHIFT + MISTAKES + ALL)")
+            print("="*70)
+            
+            D = DigitalBridge.get_D()
+            base_candidates = GeometricFamilies.generate_all_candidates(D, 32)
+            filtered = GeometricFamilies.filter_candidates(base_candidates)
+            
+            print(f"\nBase candidates: {len(filtered):,}")
+            print("\nExpanding with all strategies...")
+            
+            expanded = NearbySquaredEngine.expand_candidates(
+                filtered,
+                radius=2,
+                include_squares=True,
+                include_bridge_powers=True,
+                include_mersenne=True,
+                include_bitshifts=True,
+                include_mistakes=True,
+                N=CURVE.n
+            )
+            
+            print(f"\n{'='*70}")
+            print(f"FULL EXPANSION COMPLETE")
+            print(f"{'='*70}")
+            print(f"Base candidates: {len(filtered):,}")
+            print(f"Final expanded set: {len(expanded):,}")
+            print(f"Expansion factor: {len(expanded)/len(filtered):.2f}x")
+            
+            sample = sorted(list(expanded))[:20]
+            print(f"\nSample of expanded candidates (first 20):")
+            for i, val in enumerate(sample):
+                print(f"  {i+1}. {hex(val)}")
+        
+        elif choice == "22":
+            print("\n" + "="*70)
+            print("EXPORT ALL CANDIDATES TO FILE")
+            print("="*70)
+            
+            D = DigitalBridge.get_D()
+            base_candidates = GeometricFamilies.generate_all_candidates(D, 32)
+            filtered = GeometricFamilies.filter_candidates(base_candidates)
+            
+            print(f"\nBase candidates: {len(filtered):,}")
+            print("\nGenerating full expanded set...")
+            
+            expanded = NearbySquaredEngine.expand_candidates(
+                filtered,
+                radius=2,
+                include_squares=True,
+                include_bridge_powers=True,
+                include_mersenne=True,
+                include_bitshifts=True,
+                include_mistakes=True,
+                N=CURVE.n
+            )
+            
+            filename = "all_candidates.txt"
+            with open(filename, 'w') as f:
+                for candidate in sorted(expanded):
+                    f.write(f"{hex(candidate)}\n")
+            
+            print(f"\nExported {len(expanded):,} candidates to {filename}")
+            print(f"File size: {os.path.getsize(filename) / 1024:.2f} KB")
         
         elif choice == "0":
             print("\nExiting Flamingo Sieve Framework.")
