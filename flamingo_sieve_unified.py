@@ -113,7 +113,7 @@ class GeometricFamilies:
     @staticmethod
     def centered_tetrahedral(n: int) -> int: return n * (n + 1) * (2 * n + 1) // 6 + 1
     @staticmethod
-    def centered_cube(n: int) -> int: return n**3 + **(n - 1)3
+    def centered_cube(n: int) -> int: return n**3 + (n - 1)**3
     @staticmethod
     def centered_octahedral(n: int) -> int: return n * (2 * n * n + 3) // 3
     @staticmethod
