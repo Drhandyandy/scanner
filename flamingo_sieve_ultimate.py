@@ -862,6 +862,263 @@ class NearbySquaredEngine:
             "includes_mersenne": include_mersenne
         }
 
+    @staticmethod
+    def generate_hyper_lattice(candidates: Set[int], N: int, dimensions: int = 2, max_candidates: int = 500) -> Set[int]:
+        """
+        Generate hyper-lattice by creating multi-dimensional products of candidates.
+        
+        This treats the candidate set as a basis for a lattice and generates
+        pairwise products (mod N) to explore dimensional relationships.
+        
+        For efficiency, limits the candidate set to max_candidates before generating
+        products to avoid memory overflow with large sets.
+        
+        Args:
+            candidates: Base candidate set
+            N: Modulus (curve order)
+            dimensions: Number of dimensions (2=pairs only for safety)
+            max_candidates: Maximum number of candidates to use for lattice generation
+        
+        Returns:
+            Expanded set with dimensional products
+        """
+        from itertools import combinations_with_replacement
+        
+        expanded = set(candidates)
+        cand_list = list(candidates)
+        
+        # Limit candidate set size to prevent memory overflow
+        if len(cand_list) > max_candidates:
+            print(f"  Limiting lattice generation to {max_candidates} candidates (from {len(cand_list):,})...")
+            # Prioritize: geometric, mersenne, bridge powers first
+            cand_list = cand_list[:max_candidates]
+        
+        # Generate pairwise products (2D lattice) - safe for large sets
+        print(f"  Generating 2D lattice products from {len(cand_list)} candidates...")
+        count = 0
+        total_pairs = len(cand_list) * (len(cand_list) + 1) // 2
+        for i in range(len(cand_list)):
+            for j in range(i, len(cand_list)):
+                product = (cand_list[i] * cand_list[j]) % N
+                expanded.add(product)
+                count += 1
+                if count % 100000 == 0:
+                    print(f"    Processed {count:,}/{total_pairs:,} pairs...")
+        
+        return expanded
+
+    @staticmethod
+    def dimensional_nearby_search(candidates: Set[int], radius: int = 2, N: int = None) -> Set[int]:
+        """
+        Apply nearby search in multiple dimensions.
+        
+        For each candidate x and each nearby value y = x ± δ,
+        also generate products x*y, x²*y, x*y² (mod N).
+        
+        Args:
+            candidates: Base candidate set
+            radius: Nearby search radius
+            N: Modulus
+        
+        Returns:
+            Dimensionally expanded nearby set
+        """
+        if N is None:
+            N = CURVE.n
+        
+        expanded = set()
+        nearby_map = {}
+        
+        # First pass: generate all nearby values
+        for c in candidates:
+            nearby_vals = NearbySquaredEngine.nearby_search(c, radius)
+            nearby_map[c] = list(nearby_vals)
+            expanded.update(nearby_vals)
+        
+        # Second pass: generate dimensional products
+        print(f"  Generating dimensional nearby products...")
+        for c in candidates:
+            c_nearby = nearby_map.get(c, [c])
+            for y in c_nearby:
+                # Add c * y (mod N)
+                expanded.add((c * y) % N)
+                # Add c² * y (mod N)
+                expanded.add((c * c * y) % N)
+                # Add c * y² (mod N)
+                expanded.add((c * y * y) % N)
+        
+        return expanded
+
+    @staticmethod
+    def hybrid_squared_engine(candidates: Set[int], N: int = None) -> Set[int]:
+        """
+        Hybrid squared engine that applies squaring recursively and cross-multiplies.
+        
+        Generates: x², (x²)², x²*y, (x*y)² for all x,y in candidates
+        
+        Args:
+            candidates: Base candidate set
+            N: Modulus
+        
+        Returns:
+            Hybrid squared expanded set
+        """
+        if N is None:
+            N = CURVE.n
+        
+        expanded = set(candidates)
+        cand_list = list(candidates)
+        
+        # First level: simple squares
+        squares = {(c * c) % N for c in cand_list}
+        expanded.update(squares)
+        
+        # Second level: squares of squares
+        print(f"  Generating recursive squares...")
+        squares_of_squares = {(s * s) % N for s in squares}
+        expanded.update(squares_of_squares)
+        
+        # Cross products: x² * y
+        print(f"  Generating hybrid cross-products...")
+        for sq in squares:
+            for c in cand_list:
+                expanded.add((sq * c) % N)
+        
+        # Squared products: (x * y)²
+        for i in range(len(cand_list)):
+            for j in range(i+1, len(cand_list)):
+                product = (cand_list[i] * cand_list[j]) % N
+                expanded.add((product * product) % N)
+        
+        return expanded
+
+    @staticmethod
+    def expand_dimensional(candidates: Set[int], 
+                          radius: int = 2,
+                          include_hyper_lattice: bool = True,
+                          include_dimensional_nearby: bool = False,  # Disabled by default (memory intensive)
+                          include_hybrid_squared: bool = False,      # Disabled by default (memory intensive)
+                          N: int = None,
+                          max_lattice_candidates: int = 300) -> Set[int]:
+        """
+        Master function for dimensional expansion.
+        
+        Applies all dimensional expansion techniques:
+        1. Standard nearby + squared (from expand_candidates)
+        2. Hyper-lattice products (optional, memory-safe with limit)
+        3. Dimensional nearby search (optional, very memory intensive)
+        4. Hybrid squared engine (optional, very memory intensive)
+        
+        Args:
+            candidates: Base candidate set
+            radius: Nearby search radius
+            include_hyper_lattice: Enable 2D lattice products (default True)
+            include_dimensional_nearby: Enable dimensional nearby (default False - too large)
+            include_hybrid_squared: Enable hybrid squared engine (default False - too large)
+            N: Modulus
+            max_lattice_candidates: Max candidates for lattice generation (default 300)
+        
+        Returns:
+            Fully dimensionally expanded candidate set
+        """
+        if N is None:
+            N = CURVE.n
+        
+        print(f"Starting dimensional expansion from {len(candidates):,} base candidates...")
+        
+        # Step 1: Standard expansion (nearby + squared + bridge + mersenne)
+        expanded = NearbySquaredEngine.expand_candidates(
+            candidates,
+            radius=radius,
+            include_squares=True,
+            include_bridge_powers=True,
+            include_mersenne=True,
+            N=N
+        )
+        print(f"  After standard expansion: {len(expanded):,}")
+        
+        # Step 2: Hyper-lattice expansion (memory-safe)
+        if include_hyper_lattice:
+            lattice_expanded = NearbySquaredEngine.generate_hyper_lattice(
+                expanded, N, dimensions=2, max_candidates=max_lattice_candidates
+            )
+            expanded.update(lattice_expanded)
+            print(f"  After hyper-lattice (2D, limited to {max_lattice_candidates}): {len(expanded):,}")
+        
+        # Step 3: Dimensional nearby search (disabled by default due to memory)
+        if include_dimensional_nearby:
+            print("  WARNING: Dimensional nearby may cause memory issues with large sets...")
+            dim_nearby = NearbySquaredEngine.dimensional_nearby_search(expanded, radius, N)
+            expanded.update(dim_nearby)
+            print(f"  After dimensional nearby: {len(expanded):,}")
+        
+        # Step 4: Hybrid squared engine (disabled by default due to memory)
+        if include_hybrid_squared:
+            print("  WARNING: Hybrid squared may cause memory issues with large sets...")
+            hybrid = NearbySquaredEngine.hybrid_squared_engine(expanded, N)
+            expanded.update(hybrid)
+            print(f"  After hybrid squared: {len(expanded):,}")
+        
+        return expanded
+
+    @staticmethod
+    def audit_dimensional(d: int, candidates: Set[int], N: int, radius: int = 2) -> Tuple[bool, int, str]:
+        """
+        Ultra-enhanced audit using full dimensional expansion.
+        
+        Checks if private key d matches any candidate in the dimensionally
+        expanded set through direct, nearby, squared, lattice, or hybrid paths.
+        
+        Returns:
+            Tuple of (is_backdoored, offset, match_type)
+        """
+        # Get dimensional expanded set
+        expanded = NearbySquaredEngine.expand_dimensional(
+            candidates,
+            radius=radius,
+            include_hyper_lattice=True,
+            include_dimensional_nearby=True,
+            include_hybrid_squared=True,
+            N=N
+        )
+        
+        # Standard audit
+        rho = AuditFunction.audit(d, N)
+        abs_rho = abs(rho)
+        
+        # Check direct match
+        if abs_rho in candidates:
+            return True, abs_rho, "direct_match"
+        
+        # Check expanded set
+        if abs_rho in expanded:
+            # Determine match type
+            if abs_rho in NearbySquaredEngine.squared_search(candidates, N):
+                return True, abs_rho, "squared_match"
+            
+            for c in candidates:
+                if abs_rho in NearbySquaredEngine.nearby_search(c, radius):
+                    return True, abs_rho, f"nearby_match_radius_{radius}"
+            
+            # Check if it's a lattice product
+            for c in candidates:
+                if abs_rho == (c * c) % N or any(abs_rho == (c * c2) % N for c2 in candidates):
+                    return True, abs_rho, "lattice_product_match"
+            
+            # Check bridge powers
+            bridge_powers = NearbySquaredEngine.generate_bridge_powers()
+            if abs_rho in {p % N for p in bridge_powers}:
+                return True, abs_rho, "bridge_power_match"
+            
+            # Check Mersenne
+            mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers()
+            if abs_rho in mersenne_nums:
+                return True, abs_rho, "mersenne_match"
+            
+            return True, abs_rho, "dimensional_expansion_match"
+        
+        return False, abs_rho, "no_match"
+
 # ============================================================================
 # SECTION 10: MORSE CODE
 # ============================================================================
@@ -1191,6 +1448,7 @@ def main():
         print("15. Enhanced Trial Recovery (Nearby, Squared & Mersenne)")
         print("16. Display Bridge Powers (65535/65536/65537)")
         print("17. Display Mersenne Numbers (2^x - 1)")
+        print("18. Run Hyper-Lattice Dimensional Scan")
         print("0. Exit")
         print("-"*70)
         
@@ -1401,6 +1659,55 @@ def main():
                 "includes_complements": True
             }
             display_raw_json(data, "Mersenne Numbers (2^x - 1)")
+        
+        elif choice == "18":
+            print("\n" + "="*70)
+            print("HYPER-LATTICE DIMENSIONAL SCAN")
+            print("="*70)
+            print("\nRunning dimensional expansion with:")
+            print("  - Standard nearby + squared + bridge + mersenne")
+            print("  - Hyper-lattice products (2D pairwise, memory-safe)")
+            print("  (Dimensional nearby and hybrid squared disabled by default)")
+            print("\nGenerating base candidates...")
+            
+            # Generate base candidates
+            D = DigitalBridge.get_D()
+            scale = 32
+            base_candidates = GeometricFamilies.generate_all_candidates(D, scale)
+            filtered = GeometricFamilies.filter_candidates(base_candidates)
+            
+            print(f"\nBase geometric candidates: {len(filtered):,}")
+            
+            # Run dimensional expansion (memory-safe defaults)
+            expanded = NearbySquaredEngine.expand_dimensional(
+                filtered,
+                radius=2,
+                include_hyper_lattice=True,
+                include_dimensional_nearby=False,  # Keep disabled for memory safety
+                include_hybrid_squared=False,      # Keep disabled for memory safety
+                N=CURVE.n,
+                max_lattice_candidates=300
+            )
+            
+            print(f"\n{'='*70}")
+            print(f"DIMENSIONAL EXPANSION COMPLETE")
+            print(f"{'='*70}")
+            print(f"Base candidates: {len(filtered):,}")
+            print(f"Final expanded set: {len(expanded):,}")
+            print(f"Expansion factor: {len(expanded)/len(filtered):.2f}x")
+            print(f"\nThe hyper-lattice has probed multi-dimensional relationships")
+            print(f"between geometric candidates, Mersenne numbers, and bridge powers.")
+            
+            # Show sample of expanded values
+            sample = sorted(list(expanded))[:20]
+            print(f"\nSample of expanded candidates (first 20):")
+            for i, val in enumerate(sample):
+                print(f"  {i+1}. {hex(val)}")
+            
+            print(f"\nNote: For full dimensional expansion (including memory-intensive")
+            print(f"dimensional nearby and hybrid squared), modify the call to")
+            print(f"expand_dimensional() with include_dimensional_nearby=True and")
+            print(f"include_hybrid_squared=True, but beware of memory usage!")
         
         elif choice == "0":
             print("\nExiting Flamingo Sieve Framework.")
