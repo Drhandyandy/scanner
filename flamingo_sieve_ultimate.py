@@ -548,6 +548,266 @@ class HNPLattice:
         return basis_info
 
 # ============================================================================
+# NEW SECTION: BRUTE-FORCE "NEARBY & SQUARED" ENGINE
+# ============================================================================
+
+class NearbySquaredEngine:
+    """
+    Brute-Force "Nearby & Squared" Engine
+    
+    This module implements:
+    - Nearby Search: Checks x, x±1, x±2, up to a configurable radius
+    - Squared Search: Calculates x² (mod n) for candidates and neighbors
+    - Bridge Powers: Includes 65535², 65536², 65537² and their products
+    - Integration: Feeds expanded sets into Trial Recovery and Audit functions
+    """
+
+    @staticmethod
+    def get_bridge_constants() -> Dict[str, int]:
+        """Get the Digital Bridge constants and nearby values"""
+        D = DigitalBridge.get_D()  # 65536
+        return {
+            "D_minus_1": D - 1,      # 65535
+            "D": D,                   # 65536
+            "D_plus_1": D + 1,        # 65537
+        }
+
+    @staticmethod
+    def generate_bridge_powers() -> Set[int]:
+        """
+        Generate squares and products of bridge constants:
+        65535², 65536², 65537², and all pairwise products
+        """
+        bridge_vals = NearbySquaredEngine.get_bridge_constants()
+        powers = set()
+        
+        vals = list(bridge_vals.values())
+        
+        # Add squares
+        for v in vals:
+            powers.add(v * v)
+        
+        # Add pairwise products
+        for i in range(len(vals)):
+            for j in range(i, len(vals)):
+                powers.add(vals[i] * vals[j])
+        
+        # Also add higher powers (cubes)
+        for v in vals:
+            powers.add(v ** 3)
+        
+        return powers
+
+    @staticmethod
+    def nearby_search(x: int, radius: int = 2) -> Set[int]:
+        """
+        Generate nearby values: x, x±1, x±2, ..., x±radius
+        
+        Args:
+            x: Base value
+            radius: Maximum offset (default 2)
+        
+        Returns:
+            Set of nearby integers
+        """
+        nearby = set()
+        for offset in range(-radius, radius + 1):
+            val = x + offset
+            if val > 0:
+                nearby.add(val)
+        return nearby
+
+    @staticmethod
+    def squared_search(values: Set[int], N: int) -> Set[int]:
+        """
+        Calculate x² (mod n) for each value in the set
+        
+        Args:
+            values: Set of input values
+            N: Modulus (curve order n)
+        
+        Returns:
+            Set of squared values mod N
+        """
+        return {(v * v) % N for v in values}
+
+    @staticmethod
+    def expand_candidates(candidates: Set[int], 
+                         radius: int = 2,
+                         include_squares: bool = True,
+                         include_bridge_powers: bool = True,
+                         N: int = None) -> Set[int]:
+        """
+        Expand candidate set with nearby and squared values
+        
+        Args:
+            candidates: Original candidate set
+            radius: Nearby search radius
+            include_squares: Whether to include squared values
+            include_bridge_powers: Whether to include bridge constant powers
+            N: Modulus for squared operations
+        
+        Returns:
+            Expanded candidate set
+        """
+        if N is None:
+            N = CURVE.n
+        
+        expanded = set()
+        
+        # Step 1: Add original candidates
+        expanded.update(candidates)
+        
+        # Step 2: Add nearby values for each candidate
+        for c in candidates:
+            nearby = NearbySquaredEngine.nearby_search(c, radius)
+            expanded.update(nearby)
+        
+        # Step 3: Add squared values (mod N)
+        if include_squares:
+            squared = NearbySquaredEngine.squared_search(expanded, N)
+            expanded.update(squared)
+        
+        # Step 4: Add bridge powers
+        if include_bridge_powers:
+            bridge_powers = NearbySquaredEngine.generate_bridge_powers()
+            # Reduce mod N
+            bridge_powers_mod = {p % N for p in bridge_powers}
+            expanded.update(bridge_powers_mod)
+            
+            # Also add nearby values around bridge powers
+            for bp in bridge_powers_mod:
+                nearby = NearbySquaredEngine.nearby_search(bp, radius)
+                expanded.update(nearby)
+        
+        # Step 5: Add products of candidates with bridge constants
+        bridge_vals = list(NearbySquaredEngine.get_bridge_constants().values())
+        for c in candidates:
+            for bv in bridge_vals:
+                product = (c * bv) % N
+                expanded.add(product)
+                # Add nearby around products too
+                expanded.update(NearbySquaredEngine.nearby_search(product, 1))
+        
+        return expanded
+
+    @staticmethod
+    def generate_comprehensive_set(D: int, scale: int = 32, radius: int = 2) -> Set[int]:
+        """
+        Generate comprehensive candidate set including:
+        - All geometric families
+        - Nearby expansions
+        - Squared values
+        - Bridge powers and products
+        """
+        # Generate base geometric candidates
+        base_candidates = GeometricFamilies.generate_all_candidates(D, scale)
+        filtered = GeometricFamilies.filter_candidates(base_candidates)
+        
+        # Expand with nearby and squared
+        expanded = NearbySquaredEngine.expand_candidates(
+            filtered,
+            radius=radius,
+            include_squares=True,
+            include_bridge_powers=True,
+            N=CURVE.n
+        )
+        
+        return expanded
+
+    @staticmethod
+    def trial_recovery_enhanced(signatures: List[Tuple[int, int, int]],
+                               candidates: Set[int],
+                               N: int,
+                               radius: int = 2) -> Optional[int]:
+        """
+        Enhanced trial recovery using expanded candidate set
+        
+        This automatically expands candidates before running trial recovery
+        """
+        # Expand candidates with nearby and squared
+        expanded = NearbySquaredEngine.expand_candidates(
+            candidates,
+            radius=radius,
+            include_squares=True,
+            include_bridge_powers=True,
+            N=N
+        )
+        
+        print(f"  Enhanced trial recovery: {len(candidates)} → {len(expanded)} candidates")
+        
+        # Run standard trial recovery on expanded set
+        return MacchettiAttack.trial_recovery(signatures, expanded, N)
+
+    @staticmethod
+    def audit_enhanced(d: int, candidates: Set[int], N: int, radius: int = 2) -> Tuple[bool, int, str]:
+        """
+        Enhanced audit function checking expanded candidate set
+        
+        Returns:
+            Tuple of (is_backdoored, offset, match_type)
+        """
+        # Expand candidates
+        expanded = NearbySquaredEngine.expand_candidates(
+            candidates,
+            radius=radius,
+            include_squares=True,
+            include_bridge_powers=True,
+            N=N
+        )
+        
+        # Standard audit
+        rho = AuditFunction.audit(d, N)
+        abs_rho = abs(rho)
+        
+        if abs_rho in candidates:
+            return True, abs_rho, "direct_match"
+        
+        # Check if it's a nearby match
+        for c in candidates:
+            nearby = NearbySquaredEngine.nearby_search(c, radius)
+            if abs_rho in nearby:
+                return True, abs_rho, f"nearby_match_radius_{radius}"
+        
+        # Check if it's a squared match
+        for c in candidates:
+            squared = (c * c) % N
+            if abs_rho == squared or abs_rho in NearbySquaredEngine.nearby_search(squared, 1):
+                return True, abs_rho, "squared_match"
+        
+        # Check bridge powers
+        bridge_powers = NearbySquaredEngine.generate_bridge_powers()
+        bridge_powers_mod = {p % N for p in bridge_powers}
+        if abs_rho in bridge_powers_mod:
+            return True, abs_rho, "bridge_power_match"
+        
+        return False, abs_rho, "no_match"
+
+    @staticmethod
+    def get_statistics(candidates: Set[int], radius: int = 2) -> Dict:
+        """Get statistics about the expanded candidate set"""
+        expanded = NearbySquaredEngine.expand_candidates(
+            candidates,
+            radius=radius,
+            include_squares=True,
+            include_bridge_powers=True,
+            N=CURVE.n
+        )
+        
+        bridge_powers = NearbySquaredEngine.generate_bridge_powers()
+        
+        return {
+            "original_count": len(candidates),
+            "expanded_count": len(expanded),
+            "expansion_factor": len(expanded) / max(1, len(candidates)),
+            "bridge_powers_count": len(bridge_powers),
+            "bridge_powers_sample": [hex(p % CURVE.n) for p in list(bridge_powers)[:10]],
+            "radius_used": radius,
+            "includes_squares": True,
+            "includes_bridge_products": True
+        }
+
+# ============================================================================
 # SECTION 10: MORSE CODE
 # ============================================================================
 
@@ -837,6 +1097,7 @@ def main():
     print("\n" + "="*70)
     print("   THE FLAMINGO SIEVE — ULTIMATE MATHEMATICAL FRAMEWORK")
     print("   Complete Implementation of Sections 1-32")
+    print("   WITH BRUTE-FORCE 'NEARBY & SQUARED' ENGINE")
     print("="*70)
     
     # Generate candidate set
@@ -847,6 +1108,11 @@ def main():
     
     print(f"✓ Generated {len(candidates)} raw candidates")
     print(f"✓ Filtered to {len(filtered)} candidates")
+    
+    # Generate expanded set with Nearby & Squared Engine
+    print("\nExpanding candidate set with Nearby & Squared Engine...")
+    expanded_candidates = NearbySquaredEngine.generate_comprehensive_set(D, scale=32, radius=2)
+    print(f"✓ Expanded to {len(expanded_candidates)} total candidates")
     
     while True:
         print("\n" + "-"*70)
@@ -864,6 +1130,10 @@ def main():
         print("10. Display Morse Code Patterns")
         print("11. Export ALL Data to CSV (Organized Sections)")
         print("12. Verify All Mathematical Identities")
+        print("13. Nearby & Squared Engine Statistics")
+        print("14. Enhanced Audit (Nearby & Squared)")
+        print("15. Enhanced Trial Recovery (Nearby & Squared)")
+        print("16. Display Bridge Powers (65535/65536/65537)")
         print("0. Exit")
         print("-"*70)
         
@@ -901,6 +1171,7 @@ def main():
             data = {
                 "total_candidates": len(candidates),
                 "filtered_candidates": len(filtered),
+                "expanded_candidates": len(expanded_candidates),
                 "density": f"{len(filtered) / (2**256):.2e}",
                 "sample_offsets": sample,
                 "sample_hex": [hex(x) for x in sample]
@@ -999,6 +1270,66 @@ def main():
                 "all_passed": all_passed,
                 "summary": f"{sum(verifications.values())}/{len(verifications)} checks passed"
             }, "Mathematical Identity Verification")
+        
+        elif choice == "13":
+            stats = NearbySquaredEngine.get_statistics(filtered, radius=2)
+            display_raw_json(stats, "Nearby & Squared Engine Statistics")
+        
+        elif choice == "14":
+            key_input = input("Enter private key (hex): ").strip()
+            try:
+                d = int(key_input, 16)
+                is_backdoored, offset, match_type = NearbySquaredEngine.audit_enhanced(
+                    d, filtered, CURVE.n, radius=2
+                )
+                
+                result = {
+                    "private_key": hex(d),
+                    "audit_rho": AuditFunction.audit(d, CURVE.n),
+                    "is_backdoored": is_backdoored,
+                    "offset": offset if is_backdoored else None,
+                    "match_type": match_type,
+                    "expanded_set_size": len(expanded_candidates)
+                }
+                display_raw_json(result, "Enhanced Audit Result (Nearby & Squared)")
+            except Exception as e:
+                print(f"Error: {e}")
+        
+        elif choice == "15":
+            print("\nEnter 3 signatures (r, s, z) in hex for Enhanced Trial Recovery:")
+            signatures = []
+            for i in range(3):
+                try:
+                    r = int(input(f"  Signature {i+1} - r: "), 16)
+                    s = int(input(f"  Signature {i+1} - s: "), 16)
+                    z = int(input(f"  Signature {i+1} - z: "), 16)
+                    signatures.append((r, s, z))
+                except Exception as e:
+                    print(f"Error parsing signature: {e}")
+                    break
+            
+            if len(signatures) == 3:
+                result = NearbySquaredEngine.trial_recovery_enhanced(
+                    signatures, filtered, CURVE.n, radius=2
+                )
+                display_raw_json({
+                    "signatures_provided": 3,
+                    "recovered_private_key": hex(result) if result else None,
+                    "success": result is not None,
+                    "expanded_set_size": len(expanded_candidates)
+                }, "Enhanced Trial Recovery Result (Nearby & Squared)")
+        
+        elif choice == "16":
+            bridge_constants = NearbySquaredEngine.get_bridge_constants()
+            bridge_powers = NearbySquaredEngine.generate_bridge_powers()
+            
+            data = {
+                "bridge_constants": {k: hex(v) for k, v in bridge_constants.items()},
+                "bridge_powers_count": len(bridge_powers),
+                "bridge_powers_sample": [hex(p % CURVE.n) for p in list(bridge_powers)[:20]],
+                "description": "Includes 65535², 65536², 65537² and all pairwise products"
+            }
+            display_raw_json(data, "Bridge Powers (65535/65536/65537)")
         
         elif choice == "0":
             print("\nExiting Flamingo Sieve Framework.")
