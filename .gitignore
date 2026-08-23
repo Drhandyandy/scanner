@@ -1,1 +1,4 @@
-Nothing to output - the added file 'flamingo_sieve_complete_unbreviated.py' is a source code file and should not be ignored.
+```
+__pycache__/
+*.pyc
+```
