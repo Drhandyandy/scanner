@@ -1,0 +1,51 @@
+2026-08-23 03:03:15,988 - INFO - ======================================================================
+2026-08-23 03:03:15,988 - INFO - THE ULTIMATE UNIFIED HUNTER - ALL STRATEGIES INTEGRATED
+2026-08-23 03:03:15,988 - INFO - ======================================================================
+2026-08-23 03:03:15,988 - INFO - Strategies enabled:
+2026-08-23 03:03:15,988 - INFO -   [✓] small
+2026-08-23 03:03:15,988 - INFO -   [✗] bridge
+2026-08-23 03:03:15,988 - INFO -   [✓] geometric
+2026-08-23 03:03:15,988 - INFO -   [✓] nearby
+2026-08-23 03:03:15,989 - INFO -   [✓] squared
+2026-08-23 03:03:15,989 - INFO -   [✓] bridge_powers
+2026-08-23 03:03:15,989 - INFO - Block range: 1 - 5
+2026-08-23 03:03:15,989 - INFO - Resume mode: False
+2026-08-23 03:03:15,989 - INFO - Threads: 4
+2026-08-23 03:03:15,989 - INFO - ======================================================================
+2026-08-23 03:03:15,989 - INFO - ============================================================
+2026-08-23 03:03:15,989 - INFO - GENERATING CANDIDATE PRIVATE KEYS
+2026-08-23 03:03:15,989 - INFO - ============================================================
+2026-08-23 03:03:15,989 - INFO - Generating small integer candidates (1-10,000)...
+2026-08-23 03:03:15,990 - INFO -   Added 10000 small integer candidates
+2026-08-23 03:03:15,990 - INFO - Generating geometric sieve candidates...
+2026-08-23 03:03:15,990 - INFO -   Added 80 geometric candidates
+2026-08-23 03:03:15,990 - INFO - Expanding with nearby values (radius=2)...
+2026-08-23 03:03:16,000 - INFO -   Expanded from 10054 to 10272 candidates
+2026-08-23 03:03:16,000 - INFO - Adding squared values (x² mod n)...
+2026-08-23 03:03:16,002 - INFO -   Added -115 squared values
+2026-08-23 03:03:16,002 - INFO - Adding bridge powers (65535², 65536², 65537²)...
+2026-08-23 03:03:16,003 - INFO -   Added 9 bridge powers
+2026-08-23 03:03:16,005 - INFO - Total candidates generated: 20,336
+2026-08-23 03:03:16,005 - INFO - Generating addresses for 20,336 candidates...
+2026-08-23 03:03:16,139 - INFO -   Address generation progress: 0/20,336 (0.0%)
+2026-08-23 03:03:17,428 - INFO -   Address generation progress: 10,000/20,336 (49.2%)
+2026-08-23 03:03:18,940 - INFO -   Address generation progress: 20,000/20,336 (98.3%)
+2026-08-23 03:03:18,940 - INFO - Generated 20,336 unique addresses
+2026-08-23 03:03:18,940 - INFO - ============================================================
+2026-08-23 03:03:18,940 - INFO - STARTING BLOCK SCAN FROM 1 TO 5
+2026-08-23 03:03:18,940 - INFO - Target addresses: 20,336
+2026-08-23 03:03:18,941 - INFO - Using 4 threads
+2026-08-23 03:03:18,941 - INFO - ============================================================
+2026-08-23 03:03:19,514 - ERROR - Error fetching txids for block 1: 400 Client Error: Bad Request for url: https://blockstream.info/api/block/1/txids
+2026-08-23 03:03:19,800 - ERROR - Error fetching txids for block 2: 400 Client Error: Bad Request for url: https://blockstream.info/api/block/2/txids
+2026-08-23 03:03:20,085 - ERROR - Error fetching txids for block 3: 400 Client Error: Bad Request for url: https://blockstream.info/api/block/3/txids
+2026-08-23 03:03:20,365 - ERROR - Error fetching txids for block 4: 400 Client Error: Bad Request for url: https://blockstream.info/api/block/4/txids
+2026-08-23 03:03:20,646 - ERROR - Error fetching txids for block 5: 400 Client Error: Bad Request for url: https://blockstream.info/api/block/5/txids
+2026-08-23 03:03:20,746 - INFO - ======================================================================
+2026-08-23 03:03:20,746 - INFO - SCAN COMPLETE
+2026-08-23 03:03:20,746 - INFO - Total blocks scanned: 5
+2026-08-23 03:03:20,747 - INFO - Total keys generated: 20,336
+2026-08-23 03:03:20,747 - INFO - Total unique addresses: 20,336
+2026-08-23 03:03:20,747 - INFO - Total matches found: 0
+2026-08-23 03:03:20,747 - INFO - Results saved to: unified_hunter_results.json
+2026-08-23 03:03:20,747 - INFO - ======================================================================
