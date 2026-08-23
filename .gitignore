@@ -1,12 +1,31 @@
 ```
-# Compiled Python files
-*.pyc
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Log files
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
-# Progress and results files (likely temporary/generated)
-unified_hunter_progress.json
-unified_hunter_results.json
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
 ```
