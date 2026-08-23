@@ -637,6 +637,79 @@ class NearbySquaredEngine:
         return mersenne_set
 
     @staticmethod
+    def generate_generalized_mersenne_32(max_multiplier: int = 8) -> Set[int]:
+        """
+        Generate Generalized Mersenne-like numbers: 2^(32*x) - 1 for x from 1 to max_multiplier
+        These target word-boundary overflow patterns common in 32-bit/64-bit integer operations.
+        
+        Generates: 2^32-1, 2^64-1, 2^96-1, 2^128-1, 2^160-1, 2^192-1, 2^224-1, 2^256-1
+        Also includes:
+        - Neighbors: ±1, ±2 around each value
+        - Complements: n - val for each
+        - Bit-shifted variants: left/right by 1-8 bits
+        
+        Args:
+            max_multiplier: Maximum multiplier for 32 (default 8 gives up to 2^256-1)
+        
+        Returns:
+            Set of generalized Mersenne numbers with variants
+        """
+        N = CURVE.n
+        gen_mersenne_set = set()
+        
+        for x in range(1, max_multiplier + 1):
+            exponent = 32 * x
+            # Calculate 2^(32*x) - 1
+            gen_mersenne_val = (1 << exponent) - 1
+            
+            # Only add if within curve order range
+            if gen_mersenne_val < N:
+                # Add base value
+                gen_mersenne_set.add(gen_mersenne_val)
+                
+                # Add complement
+                complement = N - gen_mersenne_val
+                gen_mersenne_set.add(complement)
+                
+                # Add neighbors (±1, ±2)
+                for offset in [-2, -1, 1, 2]:
+                    neighbor = gen_mersenne_val + offset
+                    if 0 < neighbor < N:
+                        gen_mersenne_set.add(neighbor)
+                    
+                    neighbor_comp = complement + offset
+                    if 0 < neighbor_comp < N:
+                        gen_mersenne_set.add(neighbor_comp)
+                
+                # Add bit-shifted variants (left and right by 1-8 bits)
+                for shift in range(1, 9):
+                    # Left shift
+                    shifted_left = (gen_mersenne_val << shift) % N
+                    if shifted_left > 0:
+                        gen_mersenne_set.add(shifted_left)
+                    
+                    # Right shift
+                    shifted_right = gen_mersenne_val >> shift
+                    if shifted_right > 0:
+                        gen_mersenne_set.add(shifted_right)
+                    
+                    # Left shift complement
+                    shifted_left_comp = (complement << shift) % N
+                    if shifted_left_comp > 0:
+                        gen_mersenne_set.add(shifted_left_comp)
+                    
+                    # Right shift complement
+                    shifted_right_comp = complement >> shift
+                    if shifted_right_comp > 0:
+                        gen_mersenne_set.add(shifted_right_comp)
+            elif gen_mersenne_val == N:
+                # Exact match with curve order (rare but possible)
+                gen_mersenne_set.add(gen_mersenne_val)
+            # If gen_mersenne_val > N, skip (no point adding neighbors either)
+        
+        return gen_mersenne_set
+
+    @staticmethod
     def nearby_search(x: int, radius: int = 2) -> Set[int]:
         """
         Generate nearby values: x, x±1, x±2, ..., x±radius
@@ -675,6 +748,7 @@ class NearbySquaredEngine:
                          include_squares: bool = True,
                          include_bridge_powers: bool = True,
                          include_mersenne: bool = False,
+                         include_generalized_mersenne_32: bool = False,
                          include_bitshifts: bool = False,
                          include_mistakes: bool = False,
                          N: int = None) -> Set[int]:
@@ -687,6 +761,7 @@ class NearbySquaredEngine:
             include_squares: Whether to include squared values
             include_bridge_powers: Whether to include bridge constant powers
             include_mersenne: Whether to include Mersenne numbers (2^x - 1)
+            include_generalized_mersenne_32: Whether to include 2^(32*x) - 1 patterns
             include_bitshifts: Whether to include bit-shifted variants
             include_mistakes: Whether to include developer mistake patterns
             N: Modulus for squared operations
@@ -739,7 +814,13 @@ class NearbySquaredEngine:
             expanded.update(mersenne_nums)
             print(f"  Added {len(mersenne_nums)} Mersenne numbers (2^x - 1)")
         
-        # Step 7: Add bit-shifted variants
+        # Step 7: Add Generalized Mersenne-32 numbers (2^(32*x) - 1)
+        if include_generalized_mersenne_32:
+            gen_mersenne_nums = NearbySquaredEngine.generate_generalized_mersenne_32()
+            expanded.update(gen_mersenne_nums)
+            print(f"  Added {len(gen_mersenne_nums)} Generalized Mersenne-32 numbers (2^(32*x) - 1 with variants)")
+        
+        # Step 8: Add bit-shifted variants
         if include_bitshifts:
             print(f"  Generating bit-shifted variants for {len(candidates)} candidates...")
             bitshift_count = 0
@@ -749,7 +830,7 @@ class NearbySquaredEngine:
                 bitshift_count += len(shifts)
             print(f"  Added {bitshift_count:,} bit-shifted variants")
         
-        # Step 8: Add developer mistake patterns
+        # Step 9: Add developer mistake patterns
         if include_mistakes:
             print("  Generating developer mistake patterns...")
             mistakes = DevMistakeFocus.generate_all_mistakes()
@@ -759,7 +840,7 @@ class NearbySquaredEngine:
         return expanded
 
     @staticmethod
-    def generate_comprehensive_set(D: int, scale: int = 32, radius: int = 2, include_mersenne: bool = False) -> Set[int]:
+    def generate_comprehensive_set(D: int, scale: int = 32, radius: int = 2, include_mersenne: bool = False, include_generalized_mersenne_32: bool = False) -> Set[int]:
         """
         Generate comprehensive candidate set including:
         - All geometric families
@@ -767,6 +848,7 @@ class NearbySquaredEngine:
         - Squared values
         - Bridge powers and products
         - Mersenne numbers (2^x - 1) if include_mersenne=True
+        - Generalized Mersenne-32 (2^(32*x) - 1) if include_generalized_mersenne_32=True
         """
         # Generate base geometric candidates
         base_candidates = GeometricFamilies.generate_all_candidates(D, scale)
@@ -779,6 +861,7 @@ class NearbySquaredEngine:
             include_squares=True,
             include_bridge_powers=True,
             include_mersenne=include_mersenne,
+            include_generalized_mersenne_32=include_generalized_mersenne_32,
             N=CURVE.n
         )
         
@@ -789,7 +872,8 @@ class NearbySquaredEngine:
                                candidates: Set[int],
                                N: int,
                                radius: int = 2,
-                               include_mersenne: bool = False) -> Optional[int]:
+                               include_mersenne: bool = False,
+                               include_generalized_mersenne_32: bool = False) -> Optional[int]:
         """
         Enhanced trial recovery using expanded candidate set
         
@@ -811,7 +895,7 @@ class NearbySquaredEngine:
         return MacchettiAttack.trial_recovery(signatures, expanded, N)
 
     @staticmethod
-    def audit_enhanced(d: int, candidates: Set[int], N: int, radius: int = 2, include_mersenne: bool = False) -> Tuple[bool, int, str]:
+    def audit_enhanced(d: int, candidates: Set[int], N: int, radius: int = 2, include_mersenne: bool = False, include_generalized_mersenne_32: bool = False) -> Tuple[bool, int, str]:
         """
         Enhanced audit function checking expanded candidate set
         
@@ -825,6 +909,7 @@ class NearbySquaredEngine:
             include_squares=True,
             include_bridge_powers=True,
             include_mersenne=include_mersenne,
+            include_generalized_mersenne_32=include_generalized_mersenne_32,
             N=N
         )
         
@@ -859,10 +944,16 @@ class NearbySquaredEngine:
             if abs_rho in mersenne_nums:
                 return True, abs_rho, "mersenne_match"
         
+        # Check Generalized Mersenne-32 numbers
+        if include_generalized_mersenne_32:
+            gen_mersenne_nums = NearbySquaredEngine.generate_generalized_mersenne_32()
+            if abs_rho in gen_mersenne_nums:
+                return True, abs_rho, "generalized_mersenne_32_match"
+        
         return False, abs_rho, "no_match"
 
     @staticmethod
-    def get_statistics(candidates: Set[int], radius: int = 2, include_mersenne: bool = False) -> Dict:
+    def get_statistics(candidates: Set[int], radius: int = 2, include_mersenne: bool = False, include_generalized_mersenne_32: bool = False) -> Dict:
         """Get statistics about the expanded candidate set"""
         expanded = NearbySquaredEngine.expand_candidates(
             candidates,
@@ -870,11 +961,13 @@ class NearbySquaredEngine:
             include_squares=True,
             include_bridge_powers=True,
             include_mersenne=include_mersenne,
+            include_generalized_mersenne_32=include_generalized_mersenne_32,
             N=CURVE.n
         )
         
         bridge_powers = NearbySquaredEngine.generate_bridge_powers()
         mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers() if include_mersenne else set()
+        gen_mersenne_nums = NearbySquaredEngine.generate_generalized_mersenne_32() if include_generalized_mersenne_32 else set()
         
         return {
             "original_count": len(candidates),
@@ -884,10 +977,13 @@ class NearbySquaredEngine:
             "bridge_powers_sample": [hex(p % CURVE.n) for p in list(bridge_powers)[:10]],
             "mersenne_count": len(mersenne_nums) if include_mersenne else 0,
             "mersenne_sample": [hex(m) for m in list(mersenne_nums)[:10]] if include_mersenne else [],
+            "generalized_mersenne_32_count": len(gen_mersenne_nums) if include_generalized_mersenne_32 else 0,
+            "generalized_mersenne_32_sample": [hex(g) for g in list(gen_mersenne_nums)[:10]] if include_generalized_mersenne_32 else [],
             "radius_used": radius,
             "includes_squares": True,
             "includes_bridge_products": True,
-            "includes_mersenne": include_mersenne
+            "includes_mersenne": include_mersenne,
+            "includes_generalized_mersenne_32": include_generalized_mersenne_32
         }
 
     @staticmethod
