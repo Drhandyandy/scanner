@@ -1,0 +1,2 @@
+lambda_hex,beta_hex,lambda_identity_mod_n,beta_identity_mod_p,glv_valid,geometric_meaning,connection
+0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72,0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee,0,0,True,Rotation by 120 degrees (cube root of unity),Maps cube to dual octahedron in sphere-cube duality
