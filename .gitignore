@@ -1,8 +1,37 @@
 ```
-# Compiled Python files
+# Export data files
+bitcoin_data_exports/
+flamingo_sieve_exports/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.env
+.env.local
+.env.*
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
+htmlcov/
 
-# Data exports (timestamped CSV files)
-bitcoin_data_exports/
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
 ```
