@@ -1,0 +1,24 @@
+{
+  "constants": {
+    "P": "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+    "N": "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+    "C": "0x1000003d1",
+    "D": "0x10000",
+    "Lambda": "0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72",
+    "Beta": "0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee",
+    "Frobenius_Trace": "0x14551231950b75fc4402da1722fc9baef"
+  },
+  "zweng_anomaly": {
+    "hx": "0x3b78ce563f89a0ed9414f5aa28ad0d96d6795f9c63",
+    "bit_length": 166,
+    "expected_bit_length": 166,
+    "has_common_substring": true,
+    "missing_bits": 90
+  },
+  "morse_stats": {
+    "prime_p_ones": 250,
+    "prime_p_zeros": 6,
+    "digital_bridge_morse_len": 85
+  },
+  "candidate_count": 395
+}

@@ -1,0 +1,8 @@
+{
+  "GLV_Lambda": "0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72",
+  "GLV_Beta": "0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee",
+  "Generator_Hx": "0x3b78ce563f89a0ed9414f5aa28ad0d96d6795f9c63",
+  "Common_Substring": "8ce563f89a0ed9414f5aa28ad0d96d6795f9c6",
+  "Arithmetic_Watermark_d_prime": 159072899,
+  "Arithmetic_Watermark_r_prime": 15460270
+}
