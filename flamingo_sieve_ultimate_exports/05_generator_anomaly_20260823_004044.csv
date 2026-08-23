@@ -1,0 +1,9 @@
+Property,Value
+H_x (hex),0x3b78ce563f89a0ed9414f5aa28ad0d96d6795f9c63
+Bit Length,166
+Missing Bits,90
+Missing Decomposition,"[64, 16, 8, 2]"
+Common Substring,8ce563f89a0ed9414f5aa28ad0d96d6795f9c6
+Has Substring,True
+Probability (single curve),2^-90
+Probability (4 curves),2^-360
