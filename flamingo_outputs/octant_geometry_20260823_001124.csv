@@ -1,0 +1,8 @@
+n,surface_P_n,interior_T_n,is_power_of_2_identity
+2,4,4,True
+4,19,32,True
+8,85,256,True
+16,361,2048,True
+32,1489,16384,True
+64,6049,131072,True
+128,24385,1048576,True
