@@ -1,0 +1,6 @@
+2026-08-23 20:58:47,370 - ERROR - Fatal error: EOF when reading a line
+2026-08-23 20:58:49,829 - INFO - Analysis exported to master_hunter_exports/analysis/sparse_structure_20260823_205849.json
+2026-08-23 20:58:49,829 - INFO - Generating candidates with strategy: all
+2026-08-23 20:58:58,874 - INFO - Generated 8,082,848 candidates
+2026-08-23 20:59:22,756 - INFO - Exported 8,082,848 candidates to master_hunter_exports/candidates/full_candidate_set_20260823_205858.txt and master_hunter_exports/candidates/full_candidate_set_20260823_205858.csv
+2026-08-23 20:59:29,270 - INFO - Analysis exported to master_hunter_exports/analysis/candidate_statistics_20260823_205929.json
