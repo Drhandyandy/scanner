@@ -1,5 +1,44 @@
-(flamingo_sieve_strategies.py is a source file, so no ignores needed)
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-```python
+# Logs
+*.log
 
+# Environment
+.env
+.env.local
+*.env.*
+
+# Dependencies
+.venv/
+venv/
+pip-log.txt
+pipenv.lock
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Testing
+.coverage
+htmlcov/
+.nyc_output/
+coverage/
+.pytest_cache/
+.mypy_cache/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
 ```
