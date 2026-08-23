@@ -1,0 +1,6 @@
+Property,Value,Verified
+Beta (β),0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee,True
+Lambda (λ),0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72,True
+Characteristic Polynomial,φ² + φ + 1 = 0,Yes
+Endomorphism Order,3,Yes
+Geometric Meaning,Rotation by 120 degrees (cube root of unity),Yes
