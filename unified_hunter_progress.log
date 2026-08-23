@@ -888,3 +888,55 @@
 2026-08-23 03:12:36,928 - INFO - Total matches found: 0
 2026-08-23 03:12:36,928 - INFO - Results saved to: unified_hunter_results.json
 2026-08-23 03:12:36,928 - INFO - ======================================================================
+2026-08-23 03:16:29,384 - INFO - ======================================================================
+2026-08-23 03:16:29,384 - INFO - THE ULTIMATE UNIFIED HUNTER - ALL STRATEGIES INTEGRATED
+2026-08-23 03:16:29,384 - INFO - ======================================================================
+2026-08-23 03:16:29,384 - INFO - Strategies enabled:
+2026-08-23 03:16:29,384 - INFO -   [✓] small
+2026-08-23 03:16:29,384 - INFO -   [✗] bridge
+2026-08-23 03:16:29,384 - INFO -   [✓] geometric
+2026-08-23 03:16:29,384 - INFO -   [✓] nearby
+2026-08-23 03:16:29,384 - INFO -   [✓] squared
+2026-08-23 03:16:29,384 - INFO -   [✓] bridge_powers
+2026-08-23 03:16:29,384 - INFO -   [✓] mersenne
+2026-08-23 03:16:29,384 - INFO - Block range: 1 - 5
+2026-08-23 03:16:29,384 - INFO - Resume mode: False
+2026-08-23 03:16:29,384 - INFO - Threads: 2
+2026-08-23 03:16:29,384 - INFO - ======================================================================
+2026-08-23 03:16:29,384 - INFO - ============================================================
+2026-08-23 03:16:29,384 - INFO - GENERATING CANDIDATE PRIVATE KEYS
+2026-08-23 03:16:29,384 - INFO - ============================================================
+2026-08-23 03:16:29,384 - INFO - Generating small integer candidates (1-10,000)...
+2026-08-23 03:16:29,385 - INFO -   Added 10000 small integer candidates
+2026-08-23 03:16:29,385 - INFO - Generating geometric sieve candidates...
+2026-08-23 03:16:29,385 - INFO -   Added 80 geometric candidates
+2026-08-23 03:16:29,385 - INFO - Expanding with nearby values (radius=2)...
+2026-08-23 03:16:29,395 - INFO -   Expanded from 10054 to 10272 candidates
+2026-08-23 03:16:29,395 - INFO - Adding squared values (x² mod n)...
+2026-08-23 03:16:29,397 - INFO -   Added -115 squared values
+2026-08-23 03:16:29,397 - INFO - Adding bridge powers (65535², 65536², 65537²)...
+2026-08-23 03:16:29,397 - INFO -   Added 9 bridge powers
+2026-08-23 03:16:29,397 - INFO - Adding Mersenne numbers (2^x - 1)...
+2026-08-23 03:16:29,397 - INFO - Generating Mersenne numbers (2^x - 1) for x in 1..256...
+2026-08-23 03:16:29,397 - INFO -   Stopped at x=256 (value exceeds curve order)
+2026-08-23 03:16:29,397 - INFO -   Generated 510 Mersenne candidates
+2026-08-23 03:16:29,398 - INFO -   Added -19826 Mersenne candidates
+2026-08-23 03:16:29,398 - INFO - Total candidates generated: 20,825
+2026-08-23 03:16:29,398 - INFO - Generating addresses for 20,825 candidates...
+2026-08-23 03:16:29,520 - INFO -   Address generation progress: 0/20,825 (0.0%)
+2026-08-23 03:16:30,767 - INFO -   Address generation progress: 10,000/20,825 (48.0%)
+2026-08-23 03:16:32,366 - INFO -   Address generation progress: 20,000/20,825 (96.0%)
+2026-08-23 03:16:32,366 - INFO - Generated 20,825 unique addresses
+2026-08-23 03:16:32,367 - INFO - ============================================================
+2026-08-23 03:16:32,367 - INFO - STARTING BLOCK SCAN FROM 1 TO 5
+2026-08-23 03:16:32,367 - INFO - Target addresses: 20,825
+2026-08-23 03:16:32,367 - INFO - Using 2 threads
+2026-08-23 03:16:32,367 - INFO - ============================================================
+2026-08-23 03:16:35,954 - INFO - ======================================================================
+2026-08-23 03:16:35,954 - INFO - SCAN COMPLETE
+2026-08-23 03:16:35,954 - INFO - Total blocks scanned: 5
+2026-08-23 03:16:35,954 - INFO - Total keys generated: 20,825
+2026-08-23 03:16:35,954 - INFO - Total unique addresses: 20,825
+2026-08-23 03:16:35,954 - INFO - Total matches found: 0
+2026-08-23 03:16:35,954 - INFO - Results saved to: unified_hunter_results.json
+2026-08-23 03:16:35,954 - INFO - ======================================================================

@@ -599,6 +599,37 @@ class NearbySquaredEngine:
         return powers
 
     @staticmethod
+    def generate_mersenne_numbers(max_exponent: int = 256) -> Set[int]:
+        """
+        Generate Mersenne numbers: 2^x - 1 for x from 1 to max_exponent
+        Also includes complements (n - val) for each Mersenne number
+        
+        Args:
+            max_exponent: Maximum exponent (default 256 for secp256k1)
+        
+        Returns:
+            Set of Mersenne numbers and their complements
+        """
+        N = CURVE.n
+        mersenne_set = set()
+        
+        for x in range(1, max_exponent + 1):
+            # Calculate 2^x - 1
+            mersenne_val = (1 << x) - 1  # Bit shift for efficiency
+            
+            # Only add if within curve order range
+            if mersenne_val < N:
+                mersenne_set.add(mersenne_val)
+                # Also add complement: n - mersenne_val
+                complement = N - mersenne_val
+                mersenne_set.add(complement)
+            else:
+                # Once we exceed N, higher exponents will also exceed
+                break
+        
+        return mersenne_set
+
+    @staticmethod
     def nearby_search(x: int, radius: int = 2) -> Set[int]:
         """
         Generate nearby values: x, x±1, x±2, ..., x±radius
@@ -636,6 +667,7 @@ class NearbySquaredEngine:
                          radius: int = 2,
                          include_squares: bool = True,
                          include_bridge_powers: bool = True,
+                         include_mersenne: bool = False,
                          N: int = None) -> Set[int]:
         """
         Expand candidate set with nearby and squared values
@@ -645,6 +677,7 @@ class NearbySquaredEngine:
             radius: Nearby search radius
             include_squares: Whether to include squared values
             include_bridge_powers: Whether to include bridge constant powers
+            include_mersenne: Whether to include Mersenne numbers (2^x - 1)
             N: Modulus for squared operations
         
         Returns:
@@ -689,16 +722,23 @@ class NearbySquaredEngine:
                 # Add nearby around products too
                 expanded.update(NearbySquaredEngine.nearby_search(product, 1))
         
+        # Step 6: Add Mersenne numbers (2^x - 1)
+        if include_mersenne:
+            mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers()
+            expanded.update(mersenne_nums)
+            print(f"  Added {len(mersenne_nums)} Mersenne numbers (2^x - 1)")
+        
         return expanded
 
     @staticmethod
-    def generate_comprehensive_set(D: int, scale: int = 32, radius: int = 2) -> Set[int]:
+    def generate_comprehensive_set(D: int, scale: int = 32, radius: int = 2, include_mersenne: bool = False) -> Set[int]:
         """
         Generate comprehensive candidate set including:
         - All geometric families
         - Nearby expansions
         - Squared values
         - Bridge powers and products
+        - Mersenne numbers (2^x - 1) if include_mersenne=True
         """
         # Generate base geometric candidates
         base_candidates = GeometricFamilies.generate_all_candidates(D, scale)
@@ -710,6 +750,7 @@ class NearbySquaredEngine:
             radius=radius,
             include_squares=True,
             include_bridge_powers=True,
+            include_mersenne=include_mersenne,
             N=CURVE.n
         )
         
@@ -719,7 +760,8 @@ class NearbySquaredEngine:
     def trial_recovery_enhanced(signatures: List[Tuple[int, int, int]],
                                candidates: Set[int],
                                N: int,
-                               radius: int = 2) -> Optional[int]:
+                               radius: int = 2,
+                               include_mersenne: bool = False) -> Optional[int]:
         """
         Enhanced trial recovery using expanded candidate set
         
@@ -731,6 +773,7 @@ class NearbySquaredEngine:
             radius=radius,
             include_squares=True,
             include_bridge_powers=True,
+            include_mersenne=include_mersenne,
             N=N
         )
         
@@ -740,7 +783,7 @@ class NearbySquaredEngine:
         return MacchettiAttack.trial_recovery(signatures, expanded, N)
 
     @staticmethod
-    def audit_enhanced(d: int, candidates: Set[int], N: int, radius: int = 2) -> Tuple[bool, int, str]:
+    def audit_enhanced(d: int, candidates: Set[int], N: int, radius: int = 2, include_mersenne: bool = False) -> Tuple[bool, int, str]:
         """
         Enhanced audit function checking expanded candidate set
         
@@ -753,6 +796,7 @@ class NearbySquaredEngine:
             radius=radius,
             include_squares=True,
             include_bridge_powers=True,
+            include_mersenne=include_mersenne,
             N=N
         )
         
@@ -781,20 +825,28 @@ class NearbySquaredEngine:
         if abs_rho in bridge_powers_mod:
             return True, abs_rho, "bridge_power_match"
         
+        # Check Mersenne numbers
+        if include_mersenne:
+            mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers()
+            if abs_rho in mersenne_nums:
+                return True, abs_rho, "mersenne_match"
+        
         return False, abs_rho, "no_match"
 
     @staticmethod
-    def get_statistics(candidates: Set[int], radius: int = 2) -> Dict:
+    def get_statistics(candidates: Set[int], radius: int = 2, include_mersenne: bool = False) -> Dict:
         """Get statistics about the expanded candidate set"""
         expanded = NearbySquaredEngine.expand_candidates(
             candidates,
             radius=radius,
             include_squares=True,
             include_bridge_powers=True,
+            include_mersenne=include_mersenne,
             N=CURVE.n
         )
         
         bridge_powers = NearbySquaredEngine.generate_bridge_powers()
+        mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers() if include_mersenne else set()
         
         return {
             "original_count": len(candidates),
@@ -802,9 +854,12 @@ class NearbySquaredEngine:
             "expansion_factor": len(expanded) / max(1, len(candidates)),
             "bridge_powers_count": len(bridge_powers),
             "bridge_powers_sample": [hex(p % CURVE.n) for p in list(bridge_powers)[:10]],
+            "mersenne_count": len(mersenne_nums) if include_mersenne else 0,
+            "mersenne_sample": [hex(m) for m in list(mersenne_nums)[:10]] if include_mersenne else [],
             "radius_used": radius,
             "includes_squares": True,
-            "includes_bridge_products": True
+            "includes_bridge_products": True,
+            "includes_mersenne": include_mersenne
         }
 
 # ============================================================================
@@ -1098,6 +1153,7 @@ def main():
     print("   THE FLAMINGO SIEVE — ULTIMATE MATHEMATICAL FRAMEWORK")
     print("   Complete Implementation of Sections 1-32")
     print("   WITH BRUTE-FORCE 'NEARBY & SQUARED' ENGINE")
+    print("   INCLUDING MERSENNE NUMBERS (2^x - 1)")
     print("="*70)
     
     # Generate candidate set
@@ -1109,10 +1165,10 @@ def main():
     print(f"✓ Generated {len(candidates)} raw candidates")
     print(f"✓ Filtered to {len(filtered)} candidates")
     
-    # Generate expanded set with Nearby & Squared Engine
-    print("\nExpanding candidate set with Nearby & Squared Engine...")
-    expanded_candidates = NearbySquaredEngine.generate_comprehensive_set(D, scale=32, radius=2)
-    print(f"✓ Expanded to {len(expanded_candidates)} total candidates")
+    # Generate expanded set with Nearby & Squared Engine (including Mersenne)
+    print("\nExpanding candidate set with Nearby & Squared Engine + Mersenne Numbers...")
+    expanded_candidates = NearbySquaredEngine.generate_comprehensive_set(D, scale=32, radius=2, include_mersenne=True)
+    print(f"✓ Expanded to {len(expanded_candidates)} total candidates (includes Mersenne numbers)")
     
     while True:
         print("\n" + "-"*70)
@@ -1130,10 +1186,11 @@ def main():
         print("10. Display Morse Code Patterns")
         print("11. Export ALL Data to CSV (Organized Sections)")
         print("12. Verify All Mathematical Identities")
-        print("13. Nearby & Squared Engine Statistics")
-        print("14. Enhanced Audit (Nearby & Squared)")
-        print("15. Enhanced Trial Recovery (Nearby & Squared)")
+        print("13. Nearby & Squared Engine Statistics (with Mersenne)")
+        print("14. Enhanced Audit (Nearby, Squared & Mersenne)")
+        print("15. Enhanced Trial Recovery (Nearby, Squared & Mersenne)")
         print("16. Display Bridge Powers (65535/65536/65537)")
+        print("17. Display Mersenne Numbers (2^x - 1)")
         print("0. Exit")
         print("-"*70)
         
@@ -1272,15 +1329,15 @@ def main():
             }, "Mathematical Identity Verification")
         
         elif choice == "13":
-            stats = NearbySquaredEngine.get_statistics(filtered, radius=2)
-            display_raw_json(stats, "Nearby & Squared Engine Statistics")
+            stats = NearbySquaredEngine.get_statistics(filtered, radius=2, include_mersenne=True)
+            display_raw_json(stats, "Nearby & Squared Engine Statistics (with Mersenne)")
         
         elif choice == "14":
             key_input = input("Enter private key (hex): ").strip()
             try:
                 d = int(key_input, 16)
                 is_backdoored, offset, match_type = NearbySquaredEngine.audit_enhanced(
-                    d, filtered, CURVE.n, radius=2
+                    d, filtered, CURVE.n, radius=2, include_mersenne=True
                 )
                 
                 result = {
@@ -1291,7 +1348,7 @@ def main():
                     "match_type": match_type,
                     "expanded_set_size": len(expanded_candidates)
                 }
-                display_raw_json(result, "Enhanced Audit Result (Nearby & Squared)")
+                display_raw_json(result, "Enhanced Audit Result (Nearby, Squared & Mersenne)")
             except Exception as e:
                 print(f"Error: {e}")
         
@@ -1310,14 +1367,14 @@ def main():
             
             if len(signatures) == 3:
                 result = NearbySquaredEngine.trial_recovery_enhanced(
-                    signatures, filtered, CURVE.n, radius=2
+                    signatures, filtered, CURVE.n, radius=2, include_mersenne=True
                 )
                 display_raw_json({
                     "signatures_provided": 3,
                     "recovered_private_key": hex(result) if result else None,
                     "success": result is not None,
                     "expanded_set_size": len(expanded_candidates)
-                }, "Enhanced Trial Recovery Result (Nearby & Squared)")
+                }, "Enhanced Trial Recovery Result (Nearby, Squared & Mersenne)")
         
         elif choice == "16":
             bridge_constants = NearbySquaredEngine.get_bridge_constants()
@@ -1330,6 +1387,20 @@ def main():
                 "description": "Includes 65535², 65536², 65537² and all pairwise products"
             }
             display_raw_json(data, "Bridge Powers (65535/65536/65537)")
+        
+        elif choice == "17":
+            mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers()
+            sample_vals = sorted(list(mersenne_nums))[:30]
+            
+            data = {
+                "total_mersenne_count": len(mersenne_nums),
+                "description": "Mersenne numbers: 2^x - 1 for x from 1 to 256, plus complements (n - val)",
+                "sample_values_hex": [hex(m) for m in sample_vals],
+                "sample_values_decimal": sample_vals,
+                "exponents_range": "1 to 256",
+                "includes_complements": True
+            }
+            display_raw_json(data, "Mersenne Numbers (2^x - 1)")
         
         elif choice == "0":
             print("\nExiting Flamingo Sieve Framework.")
