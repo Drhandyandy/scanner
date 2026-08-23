@@ -1,0 +1,17 @@
+[
+  {
+    "block": 170002,
+    "matches": [],
+    "pattern_matches": [
+      {
+        "type": "input",
+        "txid": "bf92c6c0612e5e3029898e0601b408c86e2e55a8d241d5f9211c3d28f925658b",
+        "pattern_found": [
+          "00000000"
+        ],
+        "script": "70736a040c350b1a04a9ab2f03522cfabe6d6d000000000000000000004269744c43202f503253482fac1eeeed88"
+      }
+    ],
+    "tx_count": 51
+  }
+]

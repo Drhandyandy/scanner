@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-THE FLAMINGO SIEVE — ULTIMATE MATHEMATICAL FRAMEWORK
+THE FLAMINGO SIEVE — ULTIMATE MATHEMATICAL FRAMEWORK + BLOCKCHAIN HUNTER
 A Unifying Theory for Detecting Hidden Structure in secp256k1
 
 Implements ALL findings from sections 1-32 including:
@@ -15,6 +15,7 @@ Implements ALL findings from sections 1-32 including:
 - Morse code patterns
 - UTXO and blockchain scanning
 - Complete CSV export system
+- LIVE BLOCKCHAIN HUNTER with multi-threaded scanning
 """
 
 import json
@@ -26,6 +27,12 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass, asdict
 import math
+import os
+import sys
+import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from collections import defaultdict
 
 # ============================================================================
 # SECTION 2: SECP256K1 CURVE PARAMETERS
@@ -630,6 +637,79 @@ class NearbySquaredEngine:
         return mersenne_set
 
     @staticmethod
+    def generate_generalized_mersenne_32(max_multiplier: int = 8) -> Set[int]:
+        """
+        Generate Generalized Mersenne-like numbers: 2^(32*x) - 1 for x from 1 to max_multiplier
+        These target word-boundary overflow patterns common in 32-bit/64-bit integer operations.
+        
+        Generates: 2^32-1, 2^64-1, 2^96-1, 2^128-1, 2^160-1, 2^192-1, 2^224-1, 2^256-1
+        Also includes:
+        - Neighbors: ±1, ±2 around each value
+        - Complements: n - val for each
+        - Bit-shifted variants: left/right by 1-8 bits
+        
+        Args:
+            max_multiplier: Maximum multiplier for 32 (default 8 gives up to 2^256-1)
+        
+        Returns:
+            Set of generalized Mersenne numbers with variants
+        """
+        N = CURVE.n
+        gen_mersenne_set = set()
+        
+        for x in range(1, max_multiplier + 1):
+            exponent = 32 * x
+            # Calculate 2^(32*x) - 1
+            gen_mersenne_val = (1 << exponent) - 1
+            
+            # Only add if within curve order range
+            if gen_mersenne_val < N:
+                # Add base value
+                gen_mersenne_set.add(gen_mersenne_val)
+                
+                # Add complement
+                complement = N - gen_mersenne_val
+                gen_mersenne_set.add(complement)
+                
+                # Add neighbors (±1, ±2)
+                for offset in [-2, -1, 1, 2]:
+                    neighbor = gen_mersenne_val + offset
+                    if 0 < neighbor < N:
+                        gen_mersenne_set.add(neighbor)
+                    
+                    neighbor_comp = complement + offset
+                    if 0 < neighbor_comp < N:
+                        gen_mersenne_set.add(neighbor_comp)
+                
+                # Add bit-shifted variants (left and right by 1-8 bits)
+                for shift in range(1, 9):
+                    # Left shift
+                    shifted_left = (gen_mersenne_val << shift) % N
+                    if shifted_left > 0:
+                        gen_mersenne_set.add(shifted_left)
+                    
+                    # Right shift
+                    shifted_right = gen_mersenne_val >> shift
+                    if shifted_right > 0:
+                        gen_mersenne_set.add(shifted_right)
+                    
+                    # Left shift complement
+                    shifted_left_comp = (complement << shift) % N
+                    if shifted_left_comp > 0:
+                        gen_mersenne_set.add(shifted_left_comp)
+                    
+                    # Right shift complement
+                    shifted_right_comp = complement >> shift
+                    if shifted_right_comp > 0:
+                        gen_mersenne_set.add(shifted_right_comp)
+            elif gen_mersenne_val == N:
+                # Exact match with curve order (rare but possible)
+                gen_mersenne_set.add(gen_mersenne_val)
+            # If gen_mersenne_val > N, skip (no point adding neighbors either)
+        
+        return gen_mersenne_set
+
+    @staticmethod
     def nearby_search(x: int, radius: int = 2) -> Set[int]:
         """
         Generate nearby values: x, x±1, x±2, ..., x±radius
@@ -668,6 +748,7 @@ class NearbySquaredEngine:
                          include_squares: bool = True,
                          include_bridge_powers: bool = True,
                          include_mersenne: bool = False,
+                         include_generalized_mersenne_32: bool = False,
                          include_bitshifts: bool = False,
                          include_mistakes: bool = False,
                          N: int = None) -> Set[int]:
@@ -680,6 +761,7 @@ class NearbySquaredEngine:
             include_squares: Whether to include squared values
             include_bridge_powers: Whether to include bridge constant powers
             include_mersenne: Whether to include Mersenne numbers (2^x - 1)
+            include_generalized_mersenne_32: Whether to include 2^(32*x) - 1 patterns
             include_bitshifts: Whether to include bit-shifted variants
             include_mistakes: Whether to include developer mistake patterns
             N: Modulus for squared operations
@@ -732,7 +814,13 @@ class NearbySquaredEngine:
             expanded.update(mersenne_nums)
             print(f"  Added {len(mersenne_nums)} Mersenne numbers (2^x - 1)")
         
-        # Step 7: Add bit-shifted variants
+        # Step 7: Add Generalized Mersenne-32 numbers (2^(32*x) - 1)
+        if include_generalized_mersenne_32:
+            gen_mersenne_nums = NearbySquaredEngine.generate_generalized_mersenne_32()
+            expanded.update(gen_mersenne_nums)
+            print(f"  Added {len(gen_mersenne_nums)} Generalized Mersenne-32 numbers (2^(32*x) - 1 with variants)")
+        
+        # Step 8: Add bit-shifted variants
         if include_bitshifts:
             print(f"  Generating bit-shifted variants for {len(candidates)} candidates...")
             bitshift_count = 0
@@ -742,7 +830,7 @@ class NearbySquaredEngine:
                 bitshift_count += len(shifts)
             print(f"  Added {bitshift_count:,} bit-shifted variants")
         
-        # Step 8: Add developer mistake patterns
+        # Step 9: Add developer mistake patterns
         if include_mistakes:
             print("  Generating developer mistake patterns...")
             mistakes = DevMistakeFocus.generate_all_mistakes()
@@ -752,7 +840,7 @@ class NearbySquaredEngine:
         return expanded
 
     @staticmethod
-    def generate_comprehensive_set(D: int, scale: int = 32, radius: int = 2, include_mersenne: bool = False) -> Set[int]:
+    def generate_comprehensive_set(D: int, scale: int = 32, radius: int = 2, include_mersenne: bool = False, include_generalized_mersenne_32: bool = False) -> Set[int]:
         """
         Generate comprehensive candidate set including:
         - All geometric families
@@ -760,6 +848,7 @@ class NearbySquaredEngine:
         - Squared values
         - Bridge powers and products
         - Mersenne numbers (2^x - 1) if include_mersenne=True
+        - Generalized Mersenne-32 (2^(32*x) - 1) if include_generalized_mersenne_32=True
         """
         # Generate base geometric candidates
         base_candidates = GeometricFamilies.generate_all_candidates(D, scale)
@@ -772,6 +861,7 @@ class NearbySquaredEngine:
             include_squares=True,
             include_bridge_powers=True,
             include_mersenne=include_mersenne,
+            include_generalized_mersenne_32=include_generalized_mersenne_32,
             N=CURVE.n
         )
         
@@ -782,7 +872,8 @@ class NearbySquaredEngine:
                                candidates: Set[int],
                                N: int,
                                radius: int = 2,
-                               include_mersenne: bool = False) -> Optional[int]:
+                               include_mersenne: bool = False,
+                               include_generalized_mersenne_32: bool = False) -> Optional[int]:
         """
         Enhanced trial recovery using expanded candidate set
         
@@ -804,7 +895,7 @@ class NearbySquaredEngine:
         return MacchettiAttack.trial_recovery(signatures, expanded, N)
 
     @staticmethod
-    def audit_enhanced(d: int, candidates: Set[int], N: int, radius: int = 2, include_mersenne: bool = False) -> Tuple[bool, int, str]:
+    def audit_enhanced(d: int, candidates: Set[int], N: int, radius: int = 2, include_mersenne: bool = False, include_generalized_mersenne_32: bool = False) -> Tuple[bool, int, str]:
         """
         Enhanced audit function checking expanded candidate set
         
@@ -818,6 +909,7 @@ class NearbySquaredEngine:
             include_squares=True,
             include_bridge_powers=True,
             include_mersenne=include_mersenne,
+            include_generalized_mersenne_32=include_generalized_mersenne_32,
             N=N
         )
         
@@ -852,10 +944,16 @@ class NearbySquaredEngine:
             if abs_rho in mersenne_nums:
                 return True, abs_rho, "mersenne_match"
         
+        # Check Generalized Mersenne-32 numbers
+        if include_generalized_mersenne_32:
+            gen_mersenne_nums = NearbySquaredEngine.generate_generalized_mersenne_32()
+            if abs_rho in gen_mersenne_nums:
+                return True, abs_rho, "generalized_mersenne_32_match"
+        
         return False, abs_rho, "no_match"
 
     @staticmethod
-    def get_statistics(candidates: Set[int], radius: int = 2, include_mersenne: bool = False) -> Dict:
+    def get_statistics(candidates: Set[int], radius: int = 2, include_mersenne: bool = False, include_generalized_mersenne_32: bool = False) -> Dict:
         """Get statistics about the expanded candidate set"""
         expanded = NearbySquaredEngine.expand_candidates(
             candidates,
@@ -863,11 +961,13 @@ class NearbySquaredEngine:
             include_squares=True,
             include_bridge_powers=True,
             include_mersenne=include_mersenne,
+            include_generalized_mersenne_32=include_generalized_mersenne_32,
             N=CURVE.n
         )
         
         bridge_powers = NearbySquaredEngine.generate_bridge_powers()
         mersenne_nums = NearbySquaredEngine.generate_mersenne_numbers() if include_mersenne else set()
+        gen_mersenne_nums = NearbySquaredEngine.generate_generalized_mersenne_32() if include_generalized_mersenne_32 else set()
         
         return {
             "original_count": len(candidates),
@@ -877,10 +977,13 @@ class NearbySquaredEngine:
             "bridge_powers_sample": [hex(p % CURVE.n) for p in list(bridge_powers)[:10]],
             "mersenne_count": len(mersenne_nums) if include_mersenne else 0,
             "mersenne_sample": [hex(m) for m in list(mersenne_nums)[:10]] if include_mersenne else [],
+            "generalized_mersenne_32_count": len(gen_mersenne_nums) if include_generalized_mersenne_32 else 0,
+            "generalized_mersenne_32_sample": [hex(g) for g in list(gen_mersenne_nums)[:10]] if include_generalized_mersenne_32 else [],
             "radius_used": radius,
             "includes_squares": True,
             "includes_bridge_products": True,
-            "includes_mersenne": include_mersenne
+            "includes_mersenne": include_mersenne,
+            "includes_generalized_mersenne_32": include_generalized_mersenne_32
         }
 
     @staticmethod
@@ -1774,6 +1877,380 @@ class DataExporter:
         print("="*60 + "\n")
 
 # ============================================================================
+# SIMILARITY ENGINE - Finds "Similar" Keys and Clusters
+# ============================================================================
+
+class SimilarityEngine:
+    """
+    Finds 'similar' keys and clusters.
+    Instead of just exact matches, it looks for:
+    1. Neighbors: k +/- delta
+    2. Bit-flips: Keys differing by 1 bit (Hamming distance 1)
+    3. Structural Clusters: Keys sharing prefixes or byte patterns
+    """
+    
+    def __init__(self, curve_order):
+        self.n = curve_order
+        
+    def get_neighbors(self, key, radius=5):
+        """Generate keys within a small numerical radius."""
+        neighbors = []
+        for delta in range(-radius, radius + 1):
+            if delta == 0: continue
+            neighbor = (key + delta) % self.n
+            if 0 < neighbor < self.n:
+                neighbors.append(neighbor)
+        return neighbors
+    
+    def get_bit_flips(self, key):
+        """Generate keys that differ by exactly 1 bit (Hamming distance 1)."""
+        flips = []
+        k_int = int(key)
+        for i in range(256):
+            flipped = k_int ^ (1 << i)
+            if 0 < flipped < self.n:
+                flips.append(flipped)
+        return flips
+    
+    def check_hamming_distance(self, k1, k2, max_dist=2):
+        """Check if two keys are within a certain Hamming distance."""
+        xor = int(k1) ^ int(k2)
+        dist = bin(xor).count('1')
+        return dist <= max_dist
+    
+    def find_clusters(self, found_keys, threshold=0.25):
+        """
+        Group found keys that are 'similar' to each other.
+        Returns a list of clusters (lists of keys).
+        """
+        if not found_keys:
+            return []
+        
+        clusters = []
+        used = set()
+        sorted_keys = sorted([int(k) for k in found_keys])
+        
+        for i, key in enumerate(sorted_keys):
+            if key in used:
+                continue
+            
+            cluster = [key]
+            used.add(key)
+            
+            # Check against subsequent keys with similar prefix
+            prefix = key >> 248  # First byte
+            for j in range(i + 1, len(sorted_keys)):
+                other = sorted_keys[j]
+                if (other >> 248) != prefix:
+                    break
+                
+                if other in used:
+                    continue
+                
+                # Check numerical closeness or bit similarity
+                if abs(key - other) < 1000 or self.check_hamming_distance(key, other, max_dist=2):
+                    cluster.append(other)
+                    used.add(other)
+            
+            if len(cluster) > 1:
+                clusters.append(cluster)
+        
+        return clusters
+
+# ============================================================================
+# BLOCKCHAIN HUNTER ENGINE
+# ============================================================================
+
+class BlockchainHunter:
+    """Multi-threaded blockchain scanner for finding candidate matches"""
+    
+    def __init__(self, candidates: Set[int], threads: int = 4, include_similar=True):
+        self.candidates = candidates
+        self.threads = threads
+        self.api_base = "https://blockstream.info/api"
+        self.include_similar = include_similar
+        self.matches = []
+        self.similarity_engine = SimilarityEngine(CURVE.n)
+        self.stats = {
+            'blocks_scanned': 0,
+            'addresses_checked': 0,
+            'matches_found': 0,
+            'start_time': None,
+            'end_time': None
+        }
+        
+    def private_key_to_address(self, priv_key: int) -> Optional[str]:
+        """Convert private key to P2PKH address"""
+        if priv_key <= 0 or priv_key >= CURVE.n:
+            return None
+            
+        # Simple deterministic address generation (mock for demo)
+        # In production, use ecdsa library
+        try:
+            import ecdsa
+            from ecdsa import SECP256k1
+            from hashlib import sha256
+            import base58
+            
+            sk = ecdsa.SigningKey.from_secret_exponent(priv_key, curve=SECP256k1)
+            vk = sk.get_verifying_key()
+            
+            # Compressed public key
+            x = vk.pubkey.point.x()
+            y = vk.pubkey.point.y()
+            prefix = b'\x03' if y % 2 else b'\x02'
+            pub_key = prefix + x.to_bytes(32, 'big')
+            
+            # Hash to address
+            h1 = sha256(pub_key).digest()
+            h2 = hashlib.new('ripemd160', h1).digest()
+            versioned = b'\x00' + h2  # Mainnet P2PKH
+            checksum = sha256(sha256(versioned).digest()).digest()[:4]
+            address = base58.b58encode(versioned + checksum).decode('ascii')
+            
+            return address
+        except ImportError:
+            # Fallback: return hash-based pseudo-address
+            h = sha256(str(priv_key).encode()).hexdigest()
+            return f"bc1q{h[:32]}"
+    
+    def fetch_block(self, block_height: int) -> Optional[Dict]:
+        """Fetch block data from Blockstream API"""
+        try:
+            # Get block hash
+            hash_url = f"{self.api_base}/block-height/{block_height}"
+            response = requests.get(hash_url, timeout=10)
+            if response.status_code != 200:
+                return None
+            block_hash = response.text.strip()
+            
+            # Get block details
+            block_url = f"{self.api_base}/block/{block_hash}"
+            response = requests.get(block_url, timeout=10)
+            if response.status_code != 200:
+                return None
+                
+            return response.json()
+        except Exception as e:
+            print(f"\nError fetching block {block_height}: {e}")
+            return None
+    
+    def scan_block(self, block_height: int) -> List[Dict]:
+        """Scan a single block for matches including similar keys"""
+        matches = []
+        block_data = self.fetch_block(block_height)
+        
+        if not block_data:
+            return matches
+        
+        # Generate address set for this scan
+        address_map = {}  # addr -> priv_key
+        similar_keys_map = {}  # addr -> (original_key, similarity_type)
+        
+        for priv_key in self.candidates:
+            addr = self.private_key_to_address(priv_key)
+            if addr:
+                address_map[addr] = priv_key
+                
+                # Generate similar keys if enabled
+                if self.include_similar:
+                    # Add neighbors (k +/- 5)
+                    neighbors = self.similarity_engine.get_neighbors(priv_key, radius=5)
+                    for neighbor in neighbors:
+                        n_addr = self.private_key_to_address(neighbor)
+                        if n_addr and n_addr not in address_map:
+                            similar_keys_map[n_addr] = (priv_key, f"neighbor_{neighbor-priv_key:+d}")
+                    
+                    # Add bit-flips (Hamming distance 1)
+                    flips = self.similarity_engine.get_bit_flips(priv_key)
+                    for flip in flips[:50]:  # Limit to first 50 to prevent explosion
+                        f_addr = self.private_key_to_address(flip)
+                        if f_addr and f_addr not in address_map:
+                            similar_keys_map[f_addr] = (priv_key, "bit_flip")
+        
+        self.stats['addresses_checked'] += len(address_map) + len(similar_keys_map)
+        
+        # Scan transactions
+        txids = block_data.get('txid', [])
+        for txid in txids:
+            try:
+                tx_url = f"{self.api_base}/tx/{txid}"
+                response = requests.get(tx_url, timeout=10)
+                if response.status_code == 200:
+                    tx_data = response.json()
+                    
+                    # Check inputs
+                    for vin in tx_data.get('vin', []):
+                        if 'prevout' in vin and 'scriptpubkey' in vin['prevout']:
+                            address = vin['prevout'].get('scriptpubkey_address', '')
+                            
+                            # Direct match
+                            if address in address_map:
+                                matches.append({
+                                    'type': 'input',
+                                    'block': block_height,
+                                    'txid': txid,
+                                    'address': address,
+                                    'private_key': hex(address_map[address]),
+                                    'similarity': 'exact_match',
+                                    'value': vin['prevout'].get('value', 0)
+                                })
+                                self.stats['matches_found'] += 1
+                            
+                            # Similar key match
+                            elif address in similar_keys_map:
+                                orig_key, sim_type = similar_keys_map[address]
+                                matches.append({
+                                    'type': 'input',
+                                    'block': block_height,
+                                    'txid': txid,
+                                    'address': address,
+                                    'private_key': hex(orig_key),
+                                    'similarity': sim_type,
+                                    'value': vin['prevout'].get('value', 0)
+                                })
+                                self.stats['matches_found'] += 1
+                    
+                    # Check outputs
+                    for vout in tx_data.get('vout', []):
+                        address = vout.get('scriptpubkey_address', '')
+                        
+                        # Direct match
+                        if address in address_map:
+                            matches.append({
+                                'type': 'output',
+                                'block': block_height,
+                                'txid': txid,
+                                'address': address,
+                                'private_key': hex(address_map[address]),
+                                'similarity': 'exact_match',
+                                'value': vout.get('value', 0)
+                            })
+                            self.stats['matches_found'] += 1
+                        
+                        # Similar key match
+                        elif address in similar_keys_map:
+                            orig_key, sim_type = similar_keys_map[address]
+                            matches.append({
+                                'type': 'output',
+                                'block': block_height,
+                                'txid': txid,
+                                'address': address,
+                                'private_key': hex(orig_key),
+                                'similarity': sim_type,
+                                'value': vout.get('value', 0)
+                            })
+                            self.stats['matches_found'] += 1
+                            
+            except Exception as e:
+                continue
+        
+        self.stats['blocks_scanned'] += 1
+        return matches
+    
+    def scan_range(self, start_block: int, end_block: int, resume_file: str = None) -> List[Dict]:
+        """Scan a range of blocks with multi-threading"""
+        self.stats['start_time'] = datetime.now()
+        
+        # Load resume state if exists
+        current_block = start_block
+        if resume_file and os.path.exists(resume_file):
+            with open(resume_file, 'r') as f:
+                state = json.load(f)
+                current_block = state.get('last_block', start_block) + 1
+                self.matches = state.get('matches', [])
+                print(f"Resumed from block {current_block}")
+        
+        blocks_to_scan = list(range(current_block, end_block + 1))
+        
+        print(f"\n{'='*70}")
+        print(f"BLOCKCHAIN HUNTER STARTED")
+        print(f"{'='*70}")
+        print(f"Scanning blocks: {current_block} to {end_block}")
+        print(f"Candidates: {len(self.candidates):,}")
+        print(f"Threads: {self.threads}")
+        print(f"{'='*70}\n")
+        
+        with ThreadPoolExecutor(max_workers=self.threads) as executor:
+            future_to_block = {
+                executor.submit(self.scan_block, block): block 
+                for block in blocks_to_scan
+            }
+            
+            for i, future in enumerate(as_completed(future_to_block)):
+                block = future_to_block[future]
+                try:
+                    block_matches = future.result()
+                    self.matches.extend(block_matches)
+                    
+                    # Progress update
+                    if (i + 1) % 10 == 0 or block == end_block:
+                        elapsed = (datetime.now() - self.stats['start_time']).total_seconds()
+                        rate = (block - current_block + 1) / max(elapsed, 1)
+                        print(f"Progress: Block {block}/{end_block} | "
+                              f"Matches: {len(self.matches)} | "
+                              f"Rate: {rate:.2f} blocks/sec")
+                    
+                    # Save checkpoint every 100 blocks
+                    if (block - start_block + 1) % 100 == 0 and resume_file:
+                        self._save_checkpoint(resume_file, block)
+                        
+                except Exception as e:
+                    print(f"Error scanning block {block}: {e}")
+        
+        self.stats['end_time'] = datetime.now()
+        return self.matches
+    
+    def _save_checkpoint(self, filename: str, last_block: int):
+        """Save progress checkpoint"""
+        state = {
+            'last_block': last_block,
+            'matches': self.matches,
+            'stats': self.stats,
+            'timestamp': datetime.now().isoformat()
+        }
+        with open(filename, 'w') as f:
+            json.dump(state, f, indent=2, default=str)
+    
+    def save_results(self, filename: str = "hunter_results.json"):
+        """Save hunt results to file"""
+        results = {
+            'scan_stats': self.stats,
+            'matches': self.matches,
+            'candidates_count': len(self.candidates),
+            'timestamp': datetime.now().isoformat()
+        }
+        with open(filename, 'w') as f:
+            json.dump(results, f, indent=2, default=str)
+        print(f"\nResults saved to {filename}")
+        
+    def print_summary(self):
+        """Print hunt summary"""
+        print(f"\n{'='*70}")
+        print("HUNT SUMMARY")
+        print(f"{'='*70}")
+        print(f"Blocks scanned: {self.stats['blocks_scanned']}")
+        print(f"Addresses checked: {self.stats['addresses_checked']:,}")
+        print(f"Matches found: {self.stats['matches_found']}")
+        
+        if self.stats['start_time'] and self.stats['end_time']:
+            duration = (self.stats['end_time'] - self.stats['start_time']).total_seconds()
+            print(f"Duration: {duration:.2f} seconds")
+            if self.stats['blocks_scanned'] > 0:
+                print(f"Scan rate: {self.stats['blocks_scanned']/max(duration, 1):.2f} blocks/sec")
+        
+        if self.matches:
+            print(f"\nMATCHES FOUND:")
+            for match in self.matches[:10]:  # Show first 10
+                print(f"  Block {match['block']}: {match['type']} - {match['address'][:20]}... "
+                      f"(Key: {match['private_key'][:20]}...)")
+            if len(self.matches) > 10:
+                print(f"  ... and {len(self.matches) - 10} more")
+        
+        print(f"{'='*70}\n")
+
+
+# ============================================================================
 # MAIN INTERACTIVE MENU
 # ============================================================================
 
@@ -1788,10 +2265,11 @@ def display_raw_json(data: dict, title: str):
 def main():
     """Main interactive menu"""
     print("\n" + "="*70)
-    print("   THE FLAMINGO SIEVE — ULTIMATE MATHEMATICAL FRAMEWORK")
+    print("   THE FLAMINGO SIEVE — ULTIMATE MATHEMATICAL FRAMEWORK + HUNTER")
     print("   Complete Implementation of Sections 1-32")
     print("   WITH BRUTE-FORCE 'NEARBY & SQUARED' ENGINE")
     print("   INCLUDING MERSENNE NUMBERS (2^x - 1)")
+    print("   LIVE BLOCKCHAIN SCANNING ENABLED")
     print("="*70)
     
     # Generate candidate set
@@ -2216,11 +2694,60 @@ def main():
                 for candidate in sorted(expanded):
                     f.write(f"{hex(candidate)}\n")
             
-            print(f"\nExported {len(expanded):,} candidates to {filename}")
+            print(f"\\nExported {len(expanded):,} candidates to {filename}")
             print(f"File size: {os.path.getsize(filename) / 1024:.2f} KB")
         
+        elif choice == "23":
+            # BLOCKCHAIN HUNTER MODE
+            print("\\n" + "="*70)
+            print("BLOCKCHAIN HUNTER - LIVE SCAN")
+            print("="*70)
+            
+            # Get expanded candidates
+            D = DigitalBridge.get_D()
+            base_candidates = GeometricFamilies.generate_all_candidates(D, 32)
+            filtered = GeometricFamilies.filter_candidates(base_candidates)
+            
+            print("\\nGenerating expanded candidate set...")
+            expanded = NearbySquaredEngine.expand_candidates(
+                filtered,
+                radius=2,
+                include_squares=True,
+                include_bridge_powers=True,
+                include_mersenne=True,
+                include_bitshifts=False,  # Keep manageable for live scan
+                include_mistakes=True,
+                N=CURVE.n
+            )
+            
+            print(f"Candidates ready: {len(expanded):,}")
+            
+            # Get scan parameters
+            try:
+                start_block = int(input("\\nStart block (default: 1): ") or "1")
+                end_block = int(input(f"End block (default: {start_block + 99}): ") or str(start_block + 99))
+                threads = int(input("Number of threads (default: 4): ") or "4")
+            except ValueError:
+                print("Invalid input. Using defaults.")
+                start_block, end_block, threads = 1, start_block + 99, 4
+            
+            resume_file = "hunter_checkpoint.json"
+            use_resume = input(f"Resume from checkpoint if exists? (y/n, default: n): ").lower().startswith('y')
+            resume = resume_file if use_resume else None
+            
+            # Run hunter
+            hunter = BlockchainHunter(expanded, threads=threads)
+            matches = hunter.scan_range(start_block, end_block, resume_file=resume)
+            hunter.print_summary()
+            
+            if matches:
+                hunter.save_results("hunter_matches.json")
+                print(f"\\n🎯 FOUND {len(matches)} MATCHES! Check hunter_matches.json")
+            else:
+                print("\\nNo matches found in this range.")
+        
         elif choice == "0":
-            print("\nExiting Flamingo Sieve Framework.")
+            print("\\nExiting Flamingo Sieve Framework.")
             break
         
         else:
