@@ -1,0 +1,16 @@
+{
+  "last_block": 170004,
+  "blocks_scanned": 4,
+  "total_keys_generated": 20825,
+  "matches_found": 1,
+  "timestamp": "2026-08-23T04:23:19.899075",
+  "strategies_used": {
+    "small": true,
+    "bridge": false,
+    "geometric": true,
+    "nearby": true,
+    "squared": true,
+    "bridge_powers": true,
+    "mersenne": true
+  }
+}

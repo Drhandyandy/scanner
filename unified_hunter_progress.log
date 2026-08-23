@@ -1156,3 +1156,110 @@
 2026-08-23 04:23:19,899 - INFO - Total matches found: 1
 2026-08-23 04:23:19,899 - INFO - Results saved to: unified_hunter_results.json
 2026-08-23 04:23:19,899 - INFO - ======================================================================
+2026-08-23 04:27:56,883 - INFO - Generating small integer candidates (1-10,000)...
+2026-08-23 04:27:56,884 - INFO -   Added 10000 small integer candidates
+2026-08-23 04:27:56,885 - INFO - Generating geometric sieve candidates...
+2026-08-23 04:27:56,885 - INFO -   Added 80 geometric candidates
+2026-08-23 04:27:56,885 - INFO - Expanding with nearby values (radius=2)...
+2026-08-23 04:27:56,894 - INFO -   Expanded from 10054 to 10272 candidates
+2026-08-23 04:27:56,894 - INFO - Adding squared values (x² mod n)...
+2026-08-23 04:27:56,897 - INFO -   Added -115 squared values
+2026-08-23 04:27:56,897 - INFO - Adding bridge powers (65535², 65536², 65537²)...
+2026-08-23 04:27:56,897 - INFO -   Added 9 bridge powers
+2026-08-23 04:27:56,897 - INFO - Adding Mersenne numbers (2^x - 1)...
+2026-08-23 04:27:56,897 - INFO - Generating Mersenne numbers (2^x - 1) for x in 1..256...
+2026-08-23 04:27:56,897 - INFO -   Stopped at x=256 (value exceeds curve order)
+2026-08-23 04:27:56,897 - INFO -   Generated 510 Mersenne candidates
+2026-08-23 04:27:56,897 - INFO -   Added -19826 Mersenne candidates
+2026-08-23 04:27:56,897 - INFO - Adding developer mistake patterns...
+2026-08-23 04:27:56,897 - INFO - Generated 254 developer mistake patterns
+2026-08-23 04:27:56,898 - INFO -   Added -20571 mistake patterns
+2026-08-23 04:27:56,898 - INFO - Generating small integer candidates (1-10,000)...
+2026-08-23 04:27:56,899 - INFO -   Added 10000 small integer candidates
+2026-08-23 04:27:56,899 - INFO - Generating geometric sieve candidates...
+2026-08-23 04:27:56,899 - INFO -   Added 80 geometric candidates
+2026-08-23 04:27:56,899 - INFO - Expanding with nearby values (radius=2)...
+2026-08-23 04:27:56,907 - INFO -   Expanded from 10054 to 10272 candidates
+2026-08-23 04:27:56,908 - INFO - Adding squared values (x² mod n)...
+2026-08-23 04:27:56,910 - INFO -   Added -115 squared values
+2026-08-23 04:27:56,910 - INFO - Adding bridge powers (65535², 65536², 65537²)...
+2026-08-23 04:27:56,910 - INFO -   Added 9 bridge powers
+2026-08-23 04:27:56,910 - INFO - Adding Mersenne numbers (2^x - 1)...
+2026-08-23 04:27:56,910 - INFO - Generating Mersenne numbers (2^x - 1) for x in 1..256...
+2026-08-23 04:27:56,910 - INFO -   Stopped at x=256 (value exceeds curve order)
+2026-08-23 04:27:56,910 - INFO -   Generated 510 Mersenne candidates
+2026-08-23 04:27:56,910 - INFO -   Added -19826 Mersenne candidates
+2026-08-23 04:27:56,910 - INFO - Adding developer mistake patterns...
+2026-08-23 04:27:56,910 - INFO - Generated 254 developer mistake patterns
+2026-08-23 04:27:56,911 - INFO -   Added -20571 mistake patterns
+2026-08-23 04:27:56,911 - INFO - Adding bit-shift variants (sampled)...
+2026-08-23 04:27:56,914 - INFO -   Bit-shift progress: 20/min(100, 100) keys
+2026-08-23 04:27:56,916 - INFO -   Bit-shift progress: 40/min(100, 100) keys
+2026-08-23 04:27:56,918 - INFO -   Bit-shift progress: 60/min(100, 100) keys
+2026-08-23 04:27:56,920 - INFO -   Bit-shift progress: 80/min(100, 100) keys
+2026-08-23 04:27:56,922 - INFO -   Bit-shift progress: 100/min(100, 100) keys
+2026-08-23 04:27:56,922 - INFO -   Added 2509 bit-shift variants
+2026-08-23 04:27:59,380 - INFO - ======================================================================
+2026-08-23 04:27:59,380 - INFO - THE ULTIMATE UNIFIED HUNTER - ALL STRATEGIES INTEGRATED
+2026-08-23 04:27:59,380 - INFO - ======================================================================
+2026-08-23 04:27:59,380 - INFO - Strategies enabled:
+2026-08-23 04:27:59,380 - INFO -   [✓] small
+2026-08-23 04:27:59,380 - INFO -   [✗] bridge
+2026-08-23 04:27:59,381 - INFO -   [✓] geometric
+2026-08-23 04:27:59,381 - INFO -   [✓] nearby
+2026-08-23 04:27:59,381 - INFO -   [✓] squared
+2026-08-23 04:27:59,381 - INFO -   [✓] bridge_powers
+2026-08-23 04:27:59,381 - INFO -   [✓] mersenne
+2026-08-23 04:27:59,381 - INFO -   [✓] bitshifts
+2026-08-23 04:27:59,381 - INFO -   [✓] mistakes
+2026-08-23 04:27:59,381 - INFO - Block range: 1 - 5
+2026-08-23 04:27:59,381 - INFO - Resume mode: False
+2026-08-23 04:27:59,381 - INFO - Threads: 2
+2026-08-23 04:27:59,381 - INFO - ======================================================================
+2026-08-23 04:27:59,381 - INFO - ============================================================
+2026-08-23 04:27:59,381 - INFO - GENERATING CANDIDATE PRIVATE KEYS
+2026-08-23 04:27:59,381 - INFO - ============================================================
+2026-08-23 04:27:59,381 - INFO - Generating small integer candidates (1-10,000)...
+2026-08-23 04:27:59,382 - INFO -   Added 10000 small integer candidates
+2026-08-23 04:27:59,383 - INFO - Generating geometric sieve candidates...
+2026-08-23 04:27:59,383 - INFO -   Added 80 geometric candidates
+2026-08-23 04:27:59,383 - INFO - Expanding with nearby values (radius=2)...
+2026-08-23 04:27:59,399 - INFO -   Expanded from 10054 to 10272 candidates
+2026-08-23 04:27:59,399 - INFO - Adding squared values (x² mod n)...
+2026-08-23 04:27:59,403 - INFO -   Added -115 squared values
+2026-08-23 04:27:59,403 - INFO - Adding bridge powers (65535², 65536², 65537²)...
+2026-08-23 04:27:59,403 - INFO -   Added 9 bridge powers
+2026-08-23 04:27:59,403 - INFO - Adding Mersenne numbers (2^x - 1)...
+2026-08-23 04:27:59,403 - INFO - Generating Mersenne numbers (2^x - 1) for x in 1..256...
+2026-08-23 04:27:59,404 - INFO -   Stopped at x=256 (value exceeds curve order)
+2026-08-23 04:27:59,404 - INFO -   Generated 510 Mersenne candidates
+2026-08-23 04:27:59,404 - INFO -   Added -19826 Mersenne candidates
+2026-08-23 04:27:59,404 - INFO - Adding developer mistake patterns...
+2026-08-23 04:27:59,404 - INFO - Generated 254 developer mistake patterns
+2026-08-23 04:27:59,404 - INFO -   Added -20571 mistake patterns
+2026-08-23 04:27:59,404 - INFO - Adding bit-shift variants (sampled)...
+2026-08-23 04:27:59,409 - INFO -   Bit-shift progress: 20/min(100, 100) keys
+2026-08-23 04:27:59,412 - INFO -   Bit-shift progress: 40/min(100, 100) keys
+2026-08-23 04:27:59,417 - INFO -   Bit-shift progress: 60/min(100, 100) keys
+2026-08-23 04:27:59,421 - INFO -   Bit-shift progress: 80/min(100, 100) keys
+2026-08-23 04:27:59,424 - INFO -   Bit-shift progress: 100/min(100, 100) keys
+2026-08-23 04:27:59,425 - INFO -   Added 2509 bit-shift variants
+2026-08-23 04:27:59,427 - INFO - Total candidates generated: 23,350
+2026-08-23 04:27:59,427 - INFO - Generating addresses for 23,350 candidates...
+2026-08-23 04:27:59,625 - INFO -   Address generation progress: 0/23,350 (0.0%)
+2026-08-23 04:28:01,036 - INFO -   Address generation progress: 10,000/23,350 (42.8%)
+2026-08-23 04:28:02,614 - INFO -   Address generation progress: 20,000/23,350 (85.7%)
+2026-08-23 04:28:02,986 - INFO - Generated 23,350 unique addresses
+2026-08-23 04:28:02,986 - INFO - ============================================================
+2026-08-23 04:28:02,986 - INFO - STARTING BLOCK SCAN FROM 1 TO 5
+2026-08-23 04:28:02,986 - INFO - Target addresses: 23,350
+2026-08-23 04:28:02,987 - INFO - Using 2 threads
+2026-08-23 04:28:02,987 - INFO - ============================================================
+2026-08-23 04:28:06,957 - INFO - ======================================================================
+2026-08-23 04:28:06,957 - INFO - SCAN COMPLETE
+2026-08-23 04:28:06,957 - INFO - Total blocks scanned: 5
+2026-08-23 04:28:06,957 - INFO - Total keys generated: 23,350
+2026-08-23 04:28:06,957 - INFO - Total unique addresses: 23,350
+2026-08-23 04:28:06,957 - INFO - Total matches found: 0
+2026-08-23 04:28:06,957 - INFO - Results saved to: unified_hunter_results.json
+2026-08-23 04:28:06,957 - INFO - ======================================================================

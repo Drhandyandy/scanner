@@ -38,6 +38,7 @@ from pathlib import Path
 from dataclasses import dataclass
 import math
 import csv
+import struct
 
 # Configure logging
 logging.basicConfig(
@@ -205,6 +206,139 @@ class CandidateGenerator:
         logger.info(f"  Generated {len(mersenne)} Mersenne candidates")
         return mersenne
     
+    def bit_shift_variants(self, key: int) -> Set[int]:
+        """Strategy 8: Generate bit-shifted variants of a key"""
+        variants = set()
+        
+        # Left shifts (1-255 bits)
+        for k in range(1, 256):
+            shifted = (key << k) % SECP256K1_N
+            if 0 < shifted < SECP256K1_N:
+                variants.add(shifted)
+        
+        # Right shifts (1-255 bits)
+        for k in range(1, 256):
+            shifted = key >> k
+            if 0 < shifted < SECP256K1_N:
+                variants.add(shifted)
+        
+        # Circular rotations (left)
+        key_bits = key.bit_length()
+        if key_bits > 0:
+            for k in range(1, min(key_bits, 256)):
+                rotated = ((key << k) | (key >> (key_bits - k))) & ((1 << key_bits) - 1)
+                if 0 < rotated < SECP256K1_N:
+                    variants.add(rotated)
+        
+        # Byte swap (endianness error simulation)
+        if key.bit_length() <= 256:
+            byte_len = (key.bit_length() + 7) // 8 or 1
+            byte_repr = key.to_bytes(byte_len, 'big')
+            swapped = int.from_bytes(byte_repr[::-1], 'big')
+            if 0 < swapped < SECP256K1_N:
+                variants.add(swapped)
+        
+        return variants
+    
+    def bit_shift_batch(self, keys: List[int], limit_per_key: int = 50) -> Set[int]:
+        """Generate bit-shift variants for a batch of keys (limited to avoid explosion)"""
+        all_variants = set()
+        for i, key in enumerate(keys[:100]):  # Limit to first 100 keys
+            variants = self.bit_shift_variants(key)
+            # Take only a sample to avoid memory explosion
+            variant_list = list(variants)[:limit_per_key]
+            all_variants.update(variant_list)
+            if (i + 1) % 20 == 0:
+                logger.info(f"  Bit-shift progress: {i+1}/min(100, {len(keys)}) keys")
+        return all_variants
+    
+    def dev_mistake_patterns(self) -> Set[int]:
+        """Strategy 9: Generate keys from common developer mistakes"""
+        mistakes = set()
+        
+        # Hardcoded test keys
+        test_keys = [
+            1, 42, 12345, 123456, 0xDEADBEEF, 0xCAFEBABE,
+            0x01010101, 0x02020202, 0x12345678, 0xABCDEF01
+        ]
+        mistakes.update(test_keys)
+        
+        # ASCII/hex decoding errors
+        ascii_strings = ["bitcoin", "password", "test", "key", "secret", 
+                        " Satoshi", "blockchain", "private"]
+        for s in ascii_strings:
+            try:
+                # Direct ASCII to int
+                val = int.from_bytes(s.encode('ascii'), 'big')
+                if 0 < val < SECP256K1_N:
+                    mistakes.add(val)
+                # SHA256 hash of string
+                h = hashlib.sha256(s.encode('ascii')).digest()
+                val = int.from_bytes(h, 'big') % SECP256K1_N
+                if 0 < val < SECP256K1_N:
+                    mistakes.add(val)
+            except:
+                pass
+        
+        # Timestamp keys (2009-2024)
+        timestamps = [
+            1231006505,  # Genesis timestamp
+            1293840000,  # 2011-01-01
+            1325376000,  # 2012-01-01
+            1356998400,  # 2013-01-01
+            1388534400,  # 2014-01-01
+            1420070400,  # 2015-01-01
+            1451606400,  # 2016-01-01
+            1483228800,  # 2017-01-01
+            1514764800,  # 2018-01-01
+            1546300800,  # 2019-01-01
+            1577836800,  # 2020-01-01
+            1609459200,  # 2021-01-01
+            1640995200,  # 2022-01-01
+            1672531200,  # 2023-01-01
+            1704067200,  # 2024-01-01
+        ]
+        mistakes.update(timestamps)
+        
+        # Sequence patterns
+        patterns = [
+            int('01' * 32, 16),
+            int('02' * 32, 16),
+            int('ab' * 32, 16),
+            int('cd' * 32, 16),
+            int('ef' * 32, 16),
+            int('12345678' * 4, 16),
+            int('abcdef' * 5 + 'abcde', 16),
+        ]
+        for p in patterns:
+            if 0 < p < SECP256K1_N:
+                mistakes.add(p)
+        
+        # Small multipliers and boundary values
+        boundaries = [
+            2**8 - 1, 2**8, 2**8 + 1,
+            2**16 - 1, 2**16, 2**16 + 1,
+            2**32 - 1, 2**32, 2**32 + 1,
+            2**64 - 1, 2**64, 2**64 + 1,
+            2**128 - 1, 2**128, 2**128 + 1,
+        ]
+        mistakes.update(boundaries)
+        
+        # Prime products
+        small_primes = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
+        for i, p1 in enumerate(small_primes):
+            for p2 in small_primes[i:]:
+                prod = p1 * p2
+                if prod < SECP256K1_N:
+                    mistakes.add(prod)
+                # Also add as large multiplier
+                large = (SECP256K1_N // 1000) * prod
+                if 0 < large < SECP256K1_N:
+                    mistakes.add(large)
+        
+        logger.info(f"Generated {len(mistakes)} developer mistake patterns")
+        return mistakes
+    
     def generate_all(self, 
                      include_small: bool = True,
                      include_bridge: bool = True,
@@ -213,6 +347,8 @@ class CandidateGenerator:
                      include_squared: bool = True,
                      include_bridge_powers: bool = True,
                      include_mersenne: bool = True,
+                     include_bitshifts: bool = False,
+                     include_mistakes: bool = False,
                      max_multiples: int = 1000000,
                      delta_range: int = 100,
                      nearby_radius: int = 2) -> List[int]:
@@ -268,7 +404,22 @@ class CandidateGenerator:
             all_candidates.update(mersenne)
             logger.info(f"  Added {len(mersenne) - original_count} Mersenne candidates")
         
-        return all_candidates  # Return set, not list
+        if include_mistakes:
+            logger.info("Adding developer mistake patterns...")
+            mistakes = self.dev_mistake_patterns()
+            original_count = len(all_candidates)
+            all_candidates.update(mistakes)
+            logger.info(f"  Added {len(mistakes) - original_count} mistake patterns")
+        
+        if include_bitshifts:
+            logger.info("Adding bit-shift variants (sampled)...")
+            base_keys = list(all_candidates)[:100]  # Sample first 100
+            bitshifted = self.bit_shift_batch(base_keys)
+            original_count = len(all_candidates)
+            all_candidates.update(bitshifted)
+            logger.info(f"  Added {len(bitshifted)} bit-shift variants")
+        
+        return list(all_candidates)  # Return as list for indexing
 
 
 class AddressGenerator:
@@ -436,7 +587,9 @@ class UnifiedHunter:
             'nearby': True,
             'squared': True,
             'bridge_powers': True,
-            'mersenne': True
+            'mersenne': True,
+            'bitshifts': False,  # Disabled by default due to explosion
+            'mistakes': True
         }
         self.resume = resume
         self.threads = threads
@@ -499,6 +652,8 @@ class UnifiedHunter:
             include_squared=self.strategies.get('squared', True),
             include_bridge_powers=self.strategies.get('bridge_powers', True),
             include_mersenne=self.strategies.get('mersenne', True),
+            include_bitshifts=self.strategies.get('bitshifts', False),
+            include_mistakes=self.strategies.get('mistakes', True),
             max_multiples=1000000,
             delta_range=100,
             nearby_radius=2
@@ -674,6 +829,10 @@ Examples:
                        help='Disable bridge powers')
     parser.add_argument('--no-mersenne', action='store_true',
                        help='Disable Mersenne numbers (2^x - 1)')
+    parser.add_argument('--no-bitshifts', action='store_true',
+                       help='Disable bit-shift variants')
+    parser.add_argument('--no-mistakes', action='store_true',
+                       help='Disable developer mistake patterns')
     
     args = parser.parse_args()
     
@@ -685,7 +844,9 @@ Examples:
         'nearby': not args.no_nearby,
         'squared': not args.no_squared,
         'bridge_powers': not args.no_bridge_powers,
-        'mersenne': not args.no_mersenne
+        'mersenne': not args.no_mersenne,
+        'bitshifts': not args.no_bitshifts,
+        'mistakes': not args.no_mistakes
     }
     
     # Create and run hunter
