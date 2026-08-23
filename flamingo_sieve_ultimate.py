@@ -1781,17 +1781,100 @@ class DataExporter:
         print("="*60 + "\n")
 
 # ============================================================================
+# SIMILARITY ENGINE - Finds "Similar" Keys and Clusters
+# ============================================================================
+
+class SimilarityEngine:
+    """
+    Finds 'similar' keys and clusters.
+    Instead of just exact matches, it looks for:
+    1. Neighbors: k +/- delta
+    2. Bit-flips: Keys differing by 1 bit (Hamming distance 1)
+    3. Structural Clusters: Keys sharing prefixes or byte patterns
+    """
+    
+    def __init__(self, curve_order):
+        self.n = curve_order
+        
+    def get_neighbors(self, key, radius=5):
+        """Generate keys within a small numerical radius."""
+        neighbors = []
+        for delta in range(-radius, radius + 1):
+            if delta == 0: continue
+            neighbor = (key + delta) % self.n
+            if 0 < neighbor < self.n:
+                neighbors.append(neighbor)
+        return neighbors
+    
+    def get_bit_flips(self, key):
+        """Generate keys that differ by exactly 1 bit (Hamming distance 1)."""
+        flips = []
+        k_int = int(key)
+        for i in range(256):
+            flipped = k_int ^ (1 << i)
+            if 0 < flipped < self.n:
+                flips.append(flipped)
+        return flips
+    
+    def check_hamming_distance(self, k1, k2, max_dist=2):
+        """Check if two keys are within a certain Hamming distance."""
+        xor = int(k1) ^ int(k2)
+        dist = bin(xor).count('1')
+        return dist <= max_dist
+    
+    def find_clusters(self, found_keys, threshold=0.25):
+        """
+        Group found keys that are 'similar' to each other.
+        Returns a list of clusters (lists of keys).
+        """
+        if not found_keys:
+            return []
+        
+        clusters = []
+        used = set()
+        sorted_keys = sorted([int(k) for k in found_keys])
+        
+        for i, key in enumerate(sorted_keys):
+            if key in used:
+                continue
+            
+            cluster = [key]
+            used.add(key)
+            
+            # Check against subsequent keys with similar prefix
+            prefix = key >> 248  # First byte
+            for j in range(i + 1, len(sorted_keys)):
+                other = sorted_keys[j]
+                if (other >> 248) != prefix:
+                    break
+                
+                if other in used:
+                    continue
+                
+                # Check numerical closeness or bit similarity
+                if abs(key - other) < 1000 or self.check_hamming_distance(key, other, max_dist=2):
+                    cluster.append(other)
+                    used.add(other)
+            
+            if len(cluster) > 1:
+                clusters.append(cluster)
+        
+        return clusters
+
+# ============================================================================
 # BLOCKCHAIN HUNTER ENGINE
 # ============================================================================
 
 class BlockchainHunter:
     """Multi-threaded blockchain scanner for finding candidate matches"""
     
-    def __init__(self, candidates: Set[int], threads: int = 4):
+    def __init__(self, candidates: Set[int], threads: int = 4, include_similar=True):
         self.candidates = candidates
         self.threads = threads
         self.api_base = "https://blockstream.info/api"
+        self.include_similar = include_similar
         self.matches = []
+        self.similarity_engine = SimilarityEngine(CURVE.n)
         self.stats = {
             'blocks_scanned': 0,
             'addresses_checked': 0,
@@ -1857,7 +1940,7 @@ class BlockchainHunter:
             return None
     
     def scan_block(self, block_height: int) -> List[Dict]:
-        """Scan a single block for matches"""
+        """Scan a single block for matches including similar keys"""
         matches = []
         block_data = self.fetch_block(block_height)
         
@@ -1865,13 +1948,31 @@ class BlockchainHunter:
             return matches
         
         # Generate address set for this scan
-        address_map = {}
+        address_map = {}  # addr -> priv_key
+        similar_keys_map = {}  # addr -> (original_key, similarity_type)
+        
         for priv_key in self.candidates:
             addr = self.private_key_to_address(priv_key)
             if addr:
                 address_map[addr] = priv_key
+                
+                # Generate similar keys if enabled
+                if self.include_similar:
+                    # Add neighbors (k +/- 5)
+                    neighbors = self.similarity_engine.get_neighbors(priv_key, radius=5)
+                    for neighbor in neighbors:
+                        n_addr = self.private_key_to_address(neighbor)
+                        if n_addr and n_addr not in address_map:
+                            similar_keys_map[n_addr] = (priv_key, f"neighbor_{neighbor-priv_key:+d}")
+                    
+                    # Add bit-flips (Hamming distance 1)
+                    flips = self.similarity_engine.get_bit_flips(priv_key)
+                    for flip in flips[:50]:  # Limit to first 50 to prevent explosion
+                        f_addr = self.private_key_to_address(flip)
+                        if f_addr and f_addr not in address_map:
+                            similar_keys_map[f_addr] = (priv_key, "bit_flip")
         
-        self.stats['addresses_checked'] += len(address_map)
+        self.stats['addresses_checked'] += len(address_map) + len(similar_keys_map)
         
         # Scan transactions
         txids = block_data.get('txid', [])
@@ -1885,8 +1986,9 @@ class BlockchainHunter:
                     # Check inputs
                     for vin in tx_data.get('vin', []):
                         if 'prevout' in vin and 'scriptpubkey' in vin['prevout']:
-                            script = vin['prevout'].get('scriptpubkey', '')
                             address = vin['prevout'].get('scriptpubkey_address', '')
+                            
+                            # Direct match
                             if address in address_map:
                                 matches.append({
                                     'type': 'input',
@@ -1894,6 +1996,21 @@ class BlockchainHunter:
                                     'txid': txid,
                                     'address': address,
                                     'private_key': hex(address_map[address]),
+                                    'similarity': 'exact_match',
+                                    'value': vin['prevout'].get('value', 0)
+                                })
+                                self.stats['matches_found'] += 1
+                            
+                            # Similar key match
+                            elif address in similar_keys_map:
+                                orig_key, sim_type = similar_keys_map[address]
+                                matches.append({
+                                    'type': 'input',
+                                    'block': block_height,
+                                    'txid': txid,
+                                    'address': address,
+                                    'private_key': hex(orig_key),
+                                    'similarity': sim_type,
                                     'value': vin['prevout'].get('value', 0)
                                 })
                                 self.stats['matches_found'] += 1
@@ -1901,6 +2018,8 @@ class BlockchainHunter:
                     # Check outputs
                     for vout in tx_data.get('vout', []):
                         address = vout.get('scriptpubkey_address', '')
+                        
+                        # Direct match
                         if address in address_map:
                             matches.append({
                                 'type': 'output',
@@ -1908,6 +2027,21 @@ class BlockchainHunter:
                                 'txid': txid,
                                 'address': address,
                                 'private_key': hex(address_map[address]),
+                                'similarity': 'exact_match',
+                                'value': vout.get('value', 0)
+                            })
+                            self.stats['matches_found'] += 1
+                        
+                        # Similar key match
+                        elif address in similar_keys_map:
+                            orig_key, sim_type = similar_keys_map[address]
+                            matches.append({
+                                'type': 'output',
+                                'block': block_height,
+                                'txid': txid,
+                                'address': address,
+                                'private_key': hex(orig_key),
+                                'similarity': sim_type,
                                 'value': vout.get('value', 0)
                             })
                             self.stats['matches_found'] += 1
