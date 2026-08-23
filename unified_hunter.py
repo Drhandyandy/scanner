@@ -9,9 +9,10 @@ Strategies:
 3. Geometric Sieve (Flamingo Sieve candidates)
 4. Nearby & Squared Engine (x±radius, x² mod n)
 5. Bridge Powers (65535², 65536², 65537² and products)
-6. Heninger Attack (Nonce collision detection)
-7. Pattern Scan (deadbeef, cafebabe, etc.)
-8. Legacy Focus (Blocks 1-250,000 optimized)
+6. Mersenne Numbers (2^x - 1 for x from 1 to 256)
+7. Heninger Attack (Nonce collision detection)
+8. Pattern Scan (deadbeef, cafebabe, etc.)
+9. Legacy Focus (Blocks 1-250,000 optimized)
 
 Features:
 - No artificial timeouts - runs until completion or manual stop
@@ -73,18 +74,20 @@ class CandidateGenerator:
         return list(range(1, max_val + 1))
     
     def digital_bridge_vicinity(self, max_multiples: int = 1000000, delta_range: int = 100) -> List[int]:
-        """Strategy 2: ±delta around multiples of 65536 and 65535"""
-        candidates = set()
+        """Strategy 2: ±delta around multiples of 65536 and 65535 - GENERATOR VERSION"""
+        # Return as generator to avoid memory overflow
+        logger.info(f"  Generating bridge vicinity for {max_multiples} multiples (streaming mode)...")
         
-        logger.info(f"  Generating bridge vicinity for {max_multiples} multiples...")
+        seen = set()  # Track duplicates only
         
         # Multiples of 65536
         for n in range(1, max_multiples + 1):
             base = n * 65536
             for delta in range(-delta_range, delta_range + 1):
                 key = base + delta
-                if 0 < key < SECP256K1_N:
-                    candidates.add(key)
+                if 0 < key < SECP256K1_N and key not in seen:
+                    seen.add(key)
+                    yield key
             
             if n % 100000 == 0:
                 logger.info(f"    Progress: {n}/{max_multiples} multiples (65536)")
@@ -94,13 +97,12 @@ class CandidateGenerator:
             base = n * 65535
             for delta in range(-delta_range, delta_range + 1):
                 key = base + delta
-                if 0 < key < SECP256K1_N:
-                    candidates.add(key)
+                if 0 < key < SECP256K1_N and key not in seen:
+                    seen.add(key)
+                    yield key
             
             if n % 100000 == 0:
                 logger.info(f"    Progress: {n}/{max_multiples} multiples (65535)")
-        
-        return sorted(list(candidates))
     
     def geometric_sieve(self) -> List[int]:
         """Strategy 3: Flamingo Sieve geometric candidates"""
@@ -181,6 +183,28 @@ class CandidateGenerator:
         
         return powers
     
+    def mersenne_numbers(self, max_exponent: int = 256) -> Set[int]:
+        """Strategy 7: Generate Mersenne numbers (2^x - 1) for x from 1 to max_exponent"""
+        mersenne = set()
+        logger.info(f"Generating Mersenne numbers (2^x - 1) for x in 1..{max_exponent}...")
+        
+        for x in range(1, max_exponent + 1):
+            val = (2 ** x) - 1
+            if 0 < val < SECP256K1_N:
+                mersenne.add(val)
+                # Also add the complement (n - val)
+                complement = SECP256K1_N - val
+                if 0 < complement < SECP256K1_N:
+                    mersenne.add(complement)
+            
+            # Stop if we've exceeded the curve order
+            if val >= SECP256K1_N:
+                logger.info(f"  Stopped at x={x} (value exceeds curve order)")
+                break
+        
+        logger.info(f"  Generated {len(mersenne)} Mersenne candidates")
+        return mersenne
+    
     def generate_all(self, 
                      include_small: bool = True,
                      include_bridge: bool = True,
@@ -188,6 +212,7 @@ class CandidateGenerator:
                      include_nearby: bool = True,
                      include_squared: bool = True,
                      include_bridge_powers: bool = True,
+                     include_mersenne: bool = True,
                      max_multiples: int = 1000000,
                      delta_range: int = 100,
                      nearby_radius: int = 2) -> List[int]:
@@ -201,10 +226,12 @@ class CandidateGenerator:
             logger.info(f"  Added {len(small)} small integer candidates")
         
         if include_bridge:
-            logger.info("Generating Digital Bridge vicinity candidates...")
-            bridge = self.digital_bridge_vicinity(max_multiples, delta_range)
-            all_candidates.update(bridge)
-            logger.info(f"  Added {len(bridge)} bridge vicinity candidates")
+            logger.info("Generating Digital Bridge vicinity candidates (streaming)...")
+            # For bridge strategy, we need to handle it specially since it's a generator
+            # We'll process it in batches during scanning, not preload all
+            logger.info(f"  Bridge vicinity will be generated on-the-fly for {max_multiples} multiples")
+            # Don't add to all_candidates here - handled separately in scan
+            self._bridge_generator = self.digital_bridge_vicinity(max_multiples, delta_range)
         
         if include_geometric:
             logger.info("Generating geometric sieve candidates...")
@@ -234,7 +261,14 @@ class CandidateGenerator:
             all_candidates.update(powers_mod)
             logger.info(f"  Added {len(powers)} bridge powers")
         
-        return sorted(list(all_candidates))
+        if include_mersenne:
+            logger.info("Adding Mersenne numbers (2^x - 1)...")
+            mersenne = self.mersenne_numbers()
+            original_count = len(all_candidates)
+            all_candidates.update(mersenne)
+            logger.info(f"  Added {len(mersenne) - original_count} Mersenne candidates")
+        
+        return all_candidates  # Return set, not list
 
 
 class AddressGenerator:
@@ -301,14 +335,29 @@ class BlockScanner:
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'UnifiedHunter/1.0'})
     
+    def get_block_hash(self, block_height: int) -> Optional[str]:
+        """Get block hash from height"""
+        try:
+            response = self.session.get(f"{self.api_base}/block-height/{block_height}", timeout=30)
+            response.raise_for_status()
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Error fetching hash for block {block_height}: {e}")
+            return None
+    
     def get_block_txids(self, block_height: int) -> List[str]:
         """Get all transaction IDs in a block"""
+        # First get the block hash
+        block_hash = self.get_block_hash(block_height)
+        if not block_hash:
+            return []
+        
         try:
-            response = self.session.get(f"{self.api_base}/block/{block_height}/txids", timeout=30)
+            response = self.session.get(f"{self.api_base}/block/{block_hash}/txids", timeout=30)
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            logger.error(f"Error fetching txids for block {block_height}: {e}")
+            logger.error(f"Error fetching txids for block {block_height} (hash={block_hash}): {e}")
             return []
     
     def get_transaction(self, txid: str) -> Optional[Dict]:
@@ -386,7 +435,8 @@ class UnifiedHunter:
             'geometric': True,
             'nearby': True,
             'squared': True,
-            'bridge_powers': True
+            'bridge_powers': True,
+            'mersenne': True
         }
         self.resume = resume
         self.threads = threads
@@ -440,17 +490,36 @@ class UnifiedHunter:
         logger.info("GENERATING CANDIDATE PRIVATE KEYS")
         logger.info("="*60)
         
-        candidates = self.candidate_gen.generate_all(
+        # First generate non-bridge candidates
+        candidates_set = self.candidate_gen.generate_all(
             include_small=self.strategies.get('small', True),
-            include_bridge=self.strategies.get('bridge', True),
+            include_bridge=False,  # Handle bridge separately
             include_geometric=self.strategies.get('geometric', True),
             include_nearby=self.strategies.get('nearby', True),
             include_squared=self.strategies.get('squared', True),
             include_bridge_powers=self.strategies.get('bridge_powers', True),
+            include_mersenne=self.strategies.get('mersenne', True),
             max_multiples=1000000,
             delta_range=100,
             nearby_radius=2
         )
+        
+        # Now handle bridge strategy with batching to avoid memory overflow
+        if self.strategies.get('bridge', True):
+            logger.info("Generating Digital Bridge vicinity candidates in batches...")
+            bridge_count = 0
+            
+            for key in self.candidate_gen.digital_bridge_vicinity(max_multiples=1000000, delta_range=100):
+                candidates_set.add(key)
+                bridge_count += 1
+                
+                # Log progress
+                if bridge_count % 50000 == 0:
+                    logger.info(f"  Generated {bridge_count:,} bridge candidates so far...")
+            
+            logger.info(f"  Added {bridge_count:,} bridge vicinity candidates")
+        
+        candidates = list(candidates_set)
         
         self.total_keys_generated = len(candidates)
         logger.info(f"Total candidates generated: {self.total_keys_generated:,}")
@@ -603,6 +672,8 @@ Examples:
                        help='Disable squared expansion')
     parser.add_argument('--no-bridge-powers', action='store_true',
                        help='Disable bridge powers')
+    parser.add_argument('--no-mersenne', action='store_true',
+                       help='Disable Mersenne numbers (2^x - 1)')
     
     args = parser.parse_args()
     
@@ -613,7 +684,8 @@ Examples:
         'geometric': not args.no_geometric,
         'nearby': not args.no_nearby,
         'squared': not args.no_squared,
-        'bridge_powers': not args.no_bridge_powers
+        'bridge_powers': not args.no_bridge_powers,
+        'mersenne': not args.no_mersenne
     }
     
     # Create and run hunter
