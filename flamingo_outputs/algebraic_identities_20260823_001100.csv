@@ -1,0 +1,2 @@
+family,k,a,b,result,expected,verified
+Mersenne_Generation,16,65536,65535,131071,131071,True

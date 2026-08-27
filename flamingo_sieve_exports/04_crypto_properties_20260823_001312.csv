@@ -1,0 +1,6 @@
+Property,Key,Value,Verified
+Arithmetic_Watermark,d_prime,159072899,True
+Arithmetic_Watermark,r_prime,15460270,True
+Arithmetic_Watermark,k0,12821110546601083977222366526004960392463090833588002659385462557150,True
+Generator_Anomaly,Bit_Length,166,True
+Generator_Anomaly,Has_Common_Substring,True,True

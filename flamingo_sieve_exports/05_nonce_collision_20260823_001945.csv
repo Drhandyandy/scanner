@@ -1,0 +1,2 @@
+nonce_value_hex,nonce_value_dec,bit_length,formula,heninger_discovery,statistical_improbability,security_implication
+0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0,57896044618658097711785492504343953926418782139537452191302581570759080747168,255,(n-1)/2,99% of repeated nonces in blockchain equal this value,1 in 1.24e+27,Deterministic nonce generation allows private key recovery
