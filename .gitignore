@@ -1,1 +1,41 @@
-Nothing should be ignored based on the provided file changes. The only added file is `extended_hnp.py`, which appears to be a Python source code file and should not be ignored.
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Dependencies
+.venv/
+venv/
+env/
+.env
+.env.local
+.env.*
+
+# Logs
+*.log
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Build/distribution
+dist/
+build/
+*.egg-info/
+
+# Testing
+.coverage
+htmlcov/
+.coverage.*
+.nox/
+.tox/
+
+# OS
+.DS_Store
+Thumbs.db
+```
